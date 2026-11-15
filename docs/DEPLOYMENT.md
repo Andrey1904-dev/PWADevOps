@@ -11,7 +11,7 @@
 - Cron `devops_quest_notifications` активен, каждую минуту; реальные HTTP-ответы worker — 200. Часы по умолчанию: 09:00, 13:00, 18:00, 21:30, пользовательский IANA timezone, opt-in, quiet hours, snooze, отдых и dedupe.
 - Telegram token и webhook secret сохранены в **Supabase Vault**, не Edge Function Secrets: подключённый инструмент не умеет изменять Edge Secrets. Server-only fallback работает; Edge Secrets можно добавить позже, они будут иметь приоритет.
 - Подтверждённых личных chat ID пока нет. Тестовая отправка пользователю и персональная доставка по расписанию не объявляются проверенными. Нужны вход в PWA, одноразовая привязка, дата первой смены, timezone и явное согласие.
-- Проверки: 24 local unit/database/outbox, 8 Edge adapter, 6 desktop/mobile production browser; 24 live assertions Auth/RLS/linking/state sync/Telegram API. Реальные пользовательские сообщения и установка на iPhone остаются на финальную проверку.
+- Проверки: 24 local unit/database/outbox, 9 Edge adapter, 6 desktop/mobile production browser; 24 live assertions Auth/RLS/linking/state sync/Telegram API. Реальные пользовательские сообщения и установка на iPhone остаются на финальную проверку.
 - npm production audit: 0 vulnerabilities. Полный audit: 4 low в dev-зависимостях цепочки deepmerge/Workbox; critical/high/moderate=0.
 - Security advisor: 2 ожидаемых предупреждения о SECURITY DEFINER публичных authenticated RPC, ограничения и ownership проверены. Подробности в VERIFICATION.md.
 

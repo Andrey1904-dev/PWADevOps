@@ -39,7 +39,24 @@ export const handler = async (req: Request): Promise<Response> => {
       arg = args.join(" ");
     const client = db();
     let reply = "";
-    if (action === "start" && arg) {
+    const validDate = (value: string) => {
+      const stamp = Date.parse(value + "T00:00:00Z");
+      return (
+        /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+        Number.isFinite(stamp) &&
+        new Date(stamp).toISOString().slice(0, 10) === value
+      );
+    };
+    if (action === "schedule" && arg && !validDate(arg)) {
+      reply =
+        "Некорректная дата. Используйте /schedule YYYY-MM-DD, например /schedule 2026-11-15.";
+    } else if (
+      action === "status" &&
+      !["not_started", "in_progress", "solved", "verified"].includes(arg)
+    ) {
+      reply =
+        "Статус: /status not_started | in_progress | solved | verified. Проверка знаний отмечается отдельно.";
+    } else if (action === "start" && arg) {
       const { data, error } = await client.rpc("consume_link", {
         hash: await hash(arg),
         telegram_chat: chat.id,

@@ -263,3 +263,35 @@ Deno.test(
     }
   },
 );
+
+Deno.test(
+  "invalid schedule dates return guidance without retrying database actions",
+  async () => {
+    const original = globalThis.fetch;
+    let dbCalls = 0;
+    let sends = 0;
+    globalThis.fetch = async (input) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("api.telegram.org")) sends++;
+      else dbCalls++;
+      return new Response(JSON.stringify({ ok: true, result: {} }), {
+        headers: { "content-type": "application/json" },
+      });
+    };
+    try {
+      const response = await webhook(
+        request({
+          update_id: 300,
+          message: {
+            chat: { id: 42, type: "private" },
+            from: { id: 42 },
+            text: "/schedule 2026-99-99",
+          },
+        }),
+      );
+      assert(response.status === 200 && sends === 1 && dbCalls === 0);
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);

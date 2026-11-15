@@ -1,6 +1,6 @@
 # Проверки — 15.11.2026
 
-Локальные наборы: 24 unit/database/outbox tests, 8 Edge tests с адаптером, 6 браузерных сценариев (3 × desktop/mobile). Полные команды и последние фактические результаты смотрите в итоговом отчёте и GitHub Actions.
+Локальные наборы: 24 unit/database/outbox tests, 9 Edge tests с адаптером, 6 браузерных сценариев (3 × desktop/mobile). Полные команды и последние фактические результаты смотрите в итоговом отчёте и GitHub Actions.
 
 PGlite выполняет реальные PostgreSQL DDL/RLS/RPC, но не имитирует Supabase Auth, Edge Runtime, Vault, pg_net или pg_cron. Cron migration пропускается в PGlite и проверяется на выделенном Supabase отдельно.
 

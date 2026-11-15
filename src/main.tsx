@@ -234,7 +234,14 @@ function App() {
     }
     const { error } =
       mode === "signup"
-        ? await supabase.auth.signUp({ email, password })
+        ? await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo:
+                window.location.origin + import.meta.env.BASE_URL,
+            },
+          })
         : await supabase.auth.signInWithPassword({ email, password });
     setMessage(error?.message || "Проверьте почту или войдите в аккаунт");
   }
