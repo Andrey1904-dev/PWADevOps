@@ -47,6 +47,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        importScripts: ["auth-security-update.js"],
         globPatterns: ["**/*.{js,css,html,png,svg}"],
         navigateFallback: "index.html",
         runtimeCaching: [],

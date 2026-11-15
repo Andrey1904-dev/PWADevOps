@@ -79,13 +79,11 @@ Deno.serve(async (req) => {
           .from("notification_jobs")
           .update({ status: sent.ok ? "sent" : "failed" })
           .eq("id", job.id);
-        await admin
-          .from("notification_delivery_log")
-          .insert({
-            user_id: realConnection.user_id,
-            job_id: job.id,
-            result: sent.ok ? "launch_test_sent" : "launch_test_failed",
-          });
+        await admin.from("notification_delivery_log").insert({
+          user_id: realConnection.user_id,
+          job_id: job.id,
+          result: sent.ok ? "launch_test_sent" : "launch_test_failed",
+        });
         ok(sent.ok, "real user test message delivery");
       } else passed.push("real user test message already attempted");
     } else passed.push("real user delivery pending: no confirmed chat ID");
@@ -386,6 +384,63 @@ Deno.serve(async (req) => {
     ok(
       (await mini.rpc("mini_session_status")).data?.allowed === false,
       "relink does not resurrect revoked sessions",
+    );
+    const { data: resetUser } = await admin.auth.admin.getUserById(users[0]);
+    const { data: resetLink, error: resetError } =
+      await admin.auth.admin.generateLink({
+        type: "recovery",
+        email: resetUser.user!.email!,
+      });
+    ok(
+      !resetError && resetLink.properties?.hashed_token,
+      "real recovery link issued without disabling email confirmation",
+    );
+    const resetClient = createClient(
+      publicConfig.url,
+      publicConfig.publishableKey,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    clients.push(resetClient);
+    const resetSession = await resetClient.auth.verifyOtp({
+      token_hash: resetLink.properties!.hashed_token,
+      type: "recovery",
+    });
+    ok(
+      !resetSession.error && resetSession.data.user?.id === users[0],
+      "real recovery token verified",
+    );
+    const newPassword = crypto.randomUUID() + crypto.randomUUID();
+    ok(
+      !(await resetClient.auth.updateUser({ password: newPassword })).error,
+      "real password reset API",
+    );
+    const resetAccess = resetSession.data.session!.access_token;
+    await resetClient.auth.signOut({ scope: "local" });
+    const oldAccessClient = createClient(
+      publicConfig.url,
+      publicConfig.publishableKey,
+      {
+        global: { headers: { Authorization: "Bearer " + resetAccess } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      },
+    );
+    ok(
+      (await oldAccessClient.from("profiles").select("id")).data?.length === 0,
+      "signed-out regular JWT immediately denied by RLS",
+    );
+    const freshLogin = createClient(
+      publicConfig.url,
+      publicConfig.publishableKey,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    clients.push(freshLogin);
+    const newLogin = await freshLogin.auth.signInWithPassword({
+      email: resetUser.user!.email!,
+      password: newPassword,
+    });
+    ok(
+      !newLogin.error && newLogin.data.user?.id === users[0],
+      "login after password reset preserves user id",
     );
     for (const c of clients) {
       ok(!(await c.auth.signOut()).error, "logout");

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./protected-fixture";
 test("local progress, timer, persistence, calendar and offline editing", async ({
   page,
   context,
@@ -81,9 +81,14 @@ test("production PWA caches shell for offline reload", async ({
   await context.setOffline(true);
   await page.reload();
   await expect(
+    page.getByRole("heading", { name: "Твой путь в DevOps начинается здесь." }),
+  ).toBeVisible();
+  await expect(page.locator("nav")).toHaveCount(0);
+  await context.setOffline(false);
+  await page.getByRole("button", { name: "Повторить проверку сессии" }).click();
+  await expect(
     page.getByRole("heading", { name: "Каждый шаг — ближе к цели." }),
   ).toBeVisible();
-  await context.setOffline(false);
 });
 
 test("XP is not doubled by status toggles or reload", async ({ page }) => {
@@ -104,9 +109,9 @@ test("Mini App adapts theme and Telegram Back without creating another UI", asyn
   );
   await page.route("**/functions/v1/telegram-auth", (route) =>
     route.fulfill({
-      status: 409,
+      status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ error: "LINK_REQUIRED" }),
+      body: JSON.stringify({ authenticated: true }),
       headers: { "Access-Control-Allow-Origin": "*" },
     }),
   );
@@ -141,7 +146,9 @@ test("Mini App adapts theme and Telegram Back without creating another UI", asyn
     };
   });
   await page.goto("./");
-  await expect(page.getByText("Твой путь инженера — здесь.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Каждый шаг — ближе к цели." }),
+  ).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute(
     "data-telegram-theme",
     "light",
@@ -165,7 +172,7 @@ test("corrupted local data produces recoverable screen and preserves original", 
 }) => {
   await page.addInitScript(() =>
     localStorage.setItem(
-      "devops-quest-v1:local",
+      "devops-quest-v1:11111111-1111-4111-8111-111111111111",
       '{"current":"missing","settings":{}}',
     ),
   );
@@ -174,100 +181,14 @@ test("corrupted local data produces recoverable screen and preserves original", 
     page.getByRole("heading", { name: "Не удалось открыть локальные данные" }),
   ).toBeVisible();
   expect(
-    await page.evaluate(() => localStorage.getItem("devops-quest-v1:local")),
+    await page.evaluate(() =>
+      localStorage.getItem(
+        "devops-quest-v1:11111111-1111-4111-8111-111111111111",
+      ),
+    ),
   ).toContain("missing");
   await expect(
     page.getByRole("button", { name: "Скачать локальную копию" }),
-  ).toBeVisible();
-});
-
-test("login loads cloud mission before allowing edits instead of waiting polling interval", async ({
-  page,
-}) => {
-  const user = {
-    id: "11111111-1111-4111-8111-111111111111",
-    email: "fixture@example.com",
-    aud: "authenticated",
-    role: "authenticated",
-    app_metadata: {},
-    user_metadata: {},
-    created_at: "2026-11-15T00:00:00Z",
-  };
-  const encode = (x: unknown) =>
-    Buffer.from(JSON.stringify(x)).toString("base64url");
-  const token =
-    encode({ alg: "HS256", typ: "JWT" }) +
-    "." +
-    encode({
-      sub: user.id,
-      aud: "authenticated",
-      role: "authenticated",
-      exp: Math.floor(Date.now() / 1000) + 3600,
-      iat: Math.floor(Date.now() / 1000),
-    }) +
-    ".test_signature";
-  await page.route(
-    "https://okswmvxxoataxprjwzjv.supabase.co/**",
-    async (route) => {
-      const path = new URL(route.request().url()).pathname;
-      let body: unknown = null;
-      if (path.endsWith("/token"))
-        body = {
-          access_token: token,
-          refresh_token: "test-refresh",
-          expires_in: 3600,
-          token_type: "bearer",
-          user,
-        };
-      else if (path.endsWith("/user")) body = user;
-      else if (path.endsWith("/profiles"))
-        body = {
-          version: 7,
-          state: {
-            current: "2-1",
-            progress: {},
-            sessions: [],
-            active: null,
-            settings: {
-              anchor: "",
-              timezone: "",
-              work: 35,
-              rest: 150,
-              heavy: 12,
-              paused: false,
-              reminders: false,
-              quietStart: "22:00",
-              quietEnd: "08:00",
-            },
-          },
-        };
-      else if (
-        path.endsWith("/reward_events") ||
-        path.endsWith("/mission_history")
-      )
-        body = [];
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(body),
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "*",
-        },
-      });
-    },
-  );
-  await page.goto("./");
-  await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByLabel("Email", { exact: true }).fill("fixture@example.com");
-  await page.getByLabel("Пароль", { exact: true }).fill("test-password-123");
-  await page.getByRole("button", { name: "Войти", exact: true }).click();
-  await expect(
-    page.getByText("fixture@example.com", { exact: true }).last(),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Главная", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Python: автоматизация", exact: true }),
   ).toBeVisible();
 });
 

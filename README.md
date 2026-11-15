@@ -1,8 +1,8 @@
 # DEVOPS QUEST
 
-**Текущий релиз: ТЗ №002. PWA опубликовано:** https://andrey1904-dev.github.io/PWADevOps/
+**Текущий релиз: ТЗ №003 — обязательная авторизация. PWA опубликовано:** https://andrey1904-dev.github.io/PWADevOps/
 
-[Фактический статус и действия пользователя](docs/DEPLOYMENT.md) · [Аудит №002](docs/AUDIT-002.md)
+[Фактический статус и действия пользователя](docs/DEPLOYMENT.md) · [Аудит №003](docs/AUDIT-003.md)
 
 Персональная PWA для обучения DevOps: React + TypeScript + Vite, Supabase, Telegram Edge Functions. Обучение и лаборатории проходят в ChatGPT/Codex; приложение ведёт маршрут, время и результаты.
 

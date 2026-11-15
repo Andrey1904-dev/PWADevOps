@@ -3,6 +3,13 @@ import { publicConfig } from "./public-config";
 import { createClient } from "@supabase/supabase-js";
 import type { MissionStatus } from "./catalog";
 import type { Operation } from "./domain";
+export const initialRecovery =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery";
+export const initialAuthError =
+  typeof window !== "undefined"
+    ? new URLSearchParams(window.location.hash.slice(1)).get("error_code")
+    : null;
 const env = import.meta.env;
 export const supabase =
   env.MODE === "test" && !env.VITE_SUPABASE_URL
@@ -38,6 +45,7 @@ export type Progress = {
   review: string;
 };
 export type State = {
+  legacyImported?: boolean;
   energy?: Record<string, "low" | "normal" | "more">;
   deferred?: Record<string, string>;
   scheduledMissions?: Record<string, string>;

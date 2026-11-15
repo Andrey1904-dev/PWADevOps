@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from "react";
 export class ErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; privateData?: boolean; scope?: string },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -15,26 +15,28 @@ export class ErrorBoundary extends Component<
         <p>
           Данные не удалены. Сохраните резервную копию перед восстановлением.
         </p>
-        <button
-          onClick={() => {
-            const data = Object.fromEntries(
-              Object.keys(localStorage)
-                .filter((k) => k.startsWith("devops-quest-v1:"))
-                .map((k) => [k, localStorage.getItem(k)]),
-            );
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(
-              new Blob([JSON.stringify(data, null, 2)], {
-                type: "application/json",
-              }),
-            );
-            link.download = "devops-quest-recovery.json";
-            link.click();
-            URL.revokeObjectURL(link.href);
-          }}
-        >
-          Скачать локальную копию
-        </button>
+        {this.props.privateData && (
+          <button
+            onClick={() => {
+              const data = Object.fromEntries(
+                Object.keys(localStorage)
+                  .filter((k) => k === "devops-quest-v1:" + this.props.scope)
+                  .map((k) => [k, localStorage.getItem(k)]),
+              );
+              const link = document.createElement("a");
+              link.href = URL.createObjectURL(
+                new Blob([JSON.stringify(data, null, 2)], {
+                  type: "application/json",
+                }),
+              );
+              link.download = "devops-quest-recovery.json";
+              link.click();
+              URL.revokeObjectURL(link.href);
+            }}
+          >
+            Скачать локальную копию
+          </button>
+        )}
         <button onClick={() => location.reload()}>Повторить запуск</button>
       </main>
     );

@@ -14,7 +14,7 @@ async function asUser(id: string, sql: string) {
 }
 beforeAll(async () => {
   await db.exec(
-    `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated;insert into auth.users values('${uid}'),('${other}');`,
+    `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,raw_user_meta_data jsonb default '{}');create table auth.sessions(id uuid primary key,user_id uuid references auth.users);create function auth.jwt() returns jsonb language sql stable as $$ select jsonb_build_object('session_id',nullif(current_setting('request.jwt.claim.sub',true),''))||coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated;insert into auth.users(id) values('${uid}'),('${other}');insert into auth.sessions values('${uid}','${uid}'),('${other}','${other}');`,
   );
   for (const file of readdirSync("supabase/migrations")
     .sort()
@@ -166,6 +166,7 @@ it("revocation immediately blocks bound JWT reads and writes, including after re
       "select connection_id from telegram_connections where chat_id=42",
     )
   ).rows[0];
+  await db.exec(`insert into auth.sessions values('${sid}','${uid}')`);
   await db.query(
     `select register_mini_app_session('${sid}','${uid}',42,'${row.connection_id}')`,
   );
@@ -180,4 +181,26 @@ it("revocation immediately blocks bound JWT reads and writes, including after re
   expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(0);
   await db.exec("set request.jwt.claims='{}'");
   expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(1);
+});
+it("logout closes RLS and privileged RPCs for an otherwise valid PWA JWT", async () => {
+  await db.exec(`delete from auth.sessions where id='${uid}'`);
+  expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(0);
+  expect(
+    (await asUser(uid, "select * from mission_progress")).rows,
+  ).toHaveLength(0);
+  await expect(asUser(uid, "select ensure_profile()")).rejects.toThrow();
+  await db.exec(`insert into auth.sessions values('${uid}','${uid}')`);
+});
+it("registration trigger persists display name without granting anonymous access", async () => {
+  const id = "99999999-9999-4999-8999-999999999999";
+  await db.exec(
+    `insert into auth.users(id,raw_user_meta_data) values('${id}','{"display_name":"Андрей QA"}')`,
+  );
+  expect(
+    (await db.query(`select display_name from profiles where id='${id}'`))
+      .rows[0],
+  ).toEqual({ display_name: "Андрей QA" });
+  await expect(
+    asUser(uid, `select display_name from profiles where id='${id}'`),
+  ).resolves.toMatchObject({ rows: [] });
 });

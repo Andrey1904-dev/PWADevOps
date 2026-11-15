@@ -1,0 +1,13 @@
+{
+  "public_signup_http": 200,
+  "confirmation_email_received": true,
+  "email_confirmation_http": 303,
+  "redirect_is_production": false,
+  "password_login_http": 200,
+  "username_persisted_in_profile": true,
+  "logout_http": 204,
+  "old_jwt_private_read_denied": true,
+  "old_jwt_private_write_denied": true,
+  "recovery_email_request_http": 429,
+  "recovery_email_delivery": "blocked_by_email_rate_limit"
+}

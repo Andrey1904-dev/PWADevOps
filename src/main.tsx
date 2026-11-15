@@ -1,3 +1,6 @@
+import type { User } from "@supabase/supabase-js";
+import { AuthGate } from "./auth/AuthGate";
+import { bounded } from "./auth/validation";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -60,8 +63,8 @@ const icons = [
   ChartNoAxesCombined,
   Settings,
 ];
-function App() {
-  const [s, setS] = useState(() => readState());
+function App({ account, onLogout }: { account: User; onLogout: () => void }) {
+  const [s, setS] = useState(() => readState(account.id));
   const [tab, setTab] = useState(
     () =>
       (
@@ -75,7 +78,9 @@ function App() {
         }) as Record<string, number>
       )[new URLSearchParams(location.search).get("screen") || ""] || 0,
   );
-  const [miniStatus, setMiniStatus] = useState(telegramApp() ? "loading" : "");
+  const [miniStatus, setMiniStatus] = useState(
+    telegramApp() ? "authenticated" : "",
+  );
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
@@ -85,12 +90,14 @@ function App() {
   const [now, setNow] = useState(Date.now());
   const [selected, setSelected] = useState(1);
   const [calendarOffset, setCalendarOffset] = useState(0);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [user, setUser] = useState("");
-  const [userId, setUserId] = useState("local");
+  const user = account.email || "";
+  const userId = account.id;
+  const displayName =
+    typeof account.user_metadata?.display_name === "string"
+      ? account.user_metadata.display_name
+      : "Инженер";
   const [busy, setBusy] = useState(false);
-  const [loadingAccount, setLoadingAccount] = useState(false);
+  const [loadingAccount, setLoadingAccount] = useState(true);
   const [telegramLinked, setTelegramLinked] = useState(false);
   useEffect(() => {
     if (!user || !supabase) {
@@ -173,7 +180,7 @@ function App() {
   useEffect(() => {
     const app = telegramApp();
     if (!app) return;
-    setMiniStatus("loading");
+    setMiniStatus("authenticated");
     app.ready();
     app.expand();
     const theme = () => {
@@ -185,9 +192,6 @@ function App() {
     };
     theme();
     app.onEvent("themeChanged", theme);
-    telegramSession()
-      .then((status) => setMiniStatus(status))
-      .catch((e) => setMiniStatus(e.message));
     return () => app.offEvent("themeChanged", theme);
   }, []);
   useEffect(() => {
@@ -224,7 +228,7 @@ function App() {
     setBusy(true);
     try {
       const scope = userId;
-      const n = await sync(s);
+      const n = await bounded(sync(s));
       if (currentUser.current !== scope) return;
       setS((current) => acknowledge(s, current, n));
       setMessage(
@@ -266,21 +270,6 @@ function App() {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", on);
     };
-  }, []);
-  useEffect(() => {
-    if (supabase) {
-      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        const scope = session?.user.id || "local";
-        setUser(session?.user.email || "");
-        if (currentUser.current !== scope) {
-          currentUser.current = scope;
-          setS(readState(scope));
-          setLoadingAccount(scope !== "local");
-        }
-        setUserId(scope);
-      });
-      return () => data.subscription.unsubscribe();
-    }
   }, []);
   useEffect(() => {
     if (loadingAccount && online && user && !busy) {
@@ -343,38 +332,6 @@ function App() {
     a.download = "devops-quest-backup.json";
     a.click();
     URL.revokeObjectURL(a.href);
-  }
-  async function auth(mode: "signup" | "login") {
-    if (!supabase) {
-      setMessage("Сначала подключите Supabase по README");
-      return;
-    }
-    const { error } =
-      mode === "signup"
-        ? await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              emailRedirectTo:
-                window.location.origin + import.meta.env.BASE_URL,
-            },
-          })
-        : await supabase.auth.signInWithPassword({ email, password });
-    setMessage(
-      error
-        ? (
-            {
-              invalid_credentials: "Неверная почта или пароль.",
-              email_not_confirmed: "Подтвердите почту перед входом.",
-              over_email_send_rate_limit:
-                "Письма запрашиваются слишком часто. Повторите позже.",
-            } as Record<string, string>
-          )[error.code || ""] ||
-            "Не удалось войти или создать аккаунт. Проверьте почту и пароль."
-        : mode === "signup"
-          ? "Подтвердите почту, затем вернитесь сюда и войдите."
-          : "Вы вошли в аккаунт.",
-    );
   }
   const card = (
     title: string,
@@ -445,7 +402,7 @@ function App() {
           <div className="profile">
             <div className="avatar">DQ</div>
             <div>
-              <b>{user || "Будущий DevOps"}</b>
+              <b>{displayName}</b>
               <small>Уровень знаний: по проверкам</small>
             </div>
             <span className="green">●</span>
@@ -1482,45 +1439,81 @@ function App() {
               </section>
               <section className="panel">
                 <h3>Аккаунт и синхронизация</h3>
+                {localStorage.getItem("devops-quest-v1:local") &&
+                  !s.legacyImported && (
+                    <details className="legacy-progress">
+                      <summary>На устройстве есть прежний прогресс</summary>
+                      <p className="muted">
+                        Можно объединить его с этим аккаунтом. Существующие
+                        записи аккаунта имеют приоритет; дата цикла и текущая
+                        миссия сохранятся.
+                      </p>
+                      <button
+                        onClick={() => {
+                          const a = document.createElement("a");
+                          a.href = URL.createObjectURL(
+                            new Blob(
+                              [
+                                localStorage.getItem("devops-quest-v1:local") ||
+                                  "{}",
+                              ],
+                              { type: "application/json" },
+                            ),
+                          );
+                          a.download = "devops-quest-legacy.json";
+                          a.click();
+                          URL.revokeObjectURL(a.href);
+                        }}
+                      >
+                        Скачать прежнюю копию
+                      </button>
+                      <button
+                        onClick={() => {
+                          try {
+                            const legacy = validateImport(
+                              JSON.parse(
+                                localStorage.getItem("devops-quest-v1:local") ||
+                                  "null",
+                              ),
+                            );
+                            change((v) => ({
+                              ...v,
+                              legacyImported: true,
+                              progress: { ...legacy.progress, ...v.progress },
+                              sessions: [
+                                ...new globalThis.Map(
+                                  [...legacy.sessions, ...v.sessions].map(
+                                    (session) => [session.id, session],
+                                  ),
+                                ).values(),
+                              ],
+                              overrides: {
+                                ...legacy.overrides,
+                                ...v.overrides,
+                              },
+                            }));
+                            setMessage(
+                              "Прежний прогресс объединён. Исходная копия сохранена на устройстве.",
+                            );
+                          } catch {
+                            setMessage(
+                              "Не удалось прочитать прежний прогресс. Скачайте исходную копию для восстановления.",
+                            );
+                          }
+                        }}
+                      >
+                        Объединить с моим аккаунтом
+                      </button>
+                    </details>
+                  )}
                 <p className="muted">
                   {supabase
                     ? "Supabase настроен"
                     : "Данные хранятся на этом устройстве. Для облака нужны параметры Supabase."}
                 </p>
-                {user ? (
-                  <>
-                    <p>{user}</p>
-                    <button onClick={() => supabase?.auth.signOut()}>
-                      Выйти
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <label>
-                      Email
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Пароль
-                      <input
-                        type="password"
-                        minLength={8}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </label>
-                    <div className="actions">
-                      <button onClick={() => auth("login")}>Войти</button>
-                      <button onClick={() => auth("signup")}>
-                        Создать аккаунт
-                      </button>
-                    </div>
-                  </>
-                )}
+                <p>{displayName}</p>
+                <p>{user}</p>
+                <button onClick={onLogout}>Выйти</button>
                 <button onClick={synchronize}>Синхронизировать</button>
                 <button
                   onClick={async () => {
@@ -1760,7 +1753,13 @@ function App() {
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <AuthGate>
+        {(account, onLogout) => (
+          <ErrorBoundary privateData scope={account.id}>
+            <App key={account.id} account={account} onLogout={onLogout} />
+          </ErrorBoundary>
+        )}
+      </AuthGate>
     </ErrorBoundary>
   </React.StrictMode>,
 );
