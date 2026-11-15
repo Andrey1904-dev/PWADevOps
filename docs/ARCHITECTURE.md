@@ -28,3 +28,5 @@ Postgres pg_cron → pg_net → Edge worker. Vault хранит случайны
 - https://supabase.com/docs/guides/database/postgres/row-level-security
 - https://supabase.com/docs/guides/functions/auth
 - https://supabase.com/changelog/supabase-cli-v3
+
+Telegram token и webhook secret хранятся в Supabase Vault. Подключённый инструмент не поддерживает Management API Edge Secrets; `runtimeSecret` предпочитает Edge Secrets и использует service-only RPC Vault как fallback. Секреты не находятся в файлах, frontend или Git; provisioning принимает токен по HTTPS, затем одноразовая provisioning capability удаляется. Временные provisioning/diagnostic endpoints после проверки отключены ответом 410.

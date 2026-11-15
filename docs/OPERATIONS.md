@@ -7,7 +7,7 @@
 1. Проверить текущую историю миграций и сделать backup перед обновлением существующей базы.
 2. Применить только отсутствующие миграции, затем `supabase/seed.sql`. Каталог не перезаписывает существующие пользовательские записи.
 3. Развернуть `link-telegram`, `telegram-webhook`, `notification-worker`. У них platform verify_jwt выключен, authentication реализован внутри handler: Auth getUser / webhook secret / cron Vault credential соответственно.
-4. Задать серверные Telegram secrets и PWA_URL. На этапе до Telegram worker остаётся в режиме ожидания.
+4. Задать серверные Telegram secrets и PWA_URL. В текущем проекте действующие Telegram credentials уже находятся в Vault. Edge Secrets имеют приоритет, поэтому их можно настроить через Dashboard без изменения кода.
 5. Указать в Supabase Auth Site URL и разрешённый redirect URL `https://andrey1904-dev.github.io/PWADevOps/`; настроить почтовую доставку и подтверждение email. Проверить signup/login/logout реальным пользователем.
 6. Убедиться, что `devops_quest_notifications` активен в cron.job и последний HTTP-ответ worker имеет 200.
 7. Опубликовать main через workflow; в Pages выбрать GitHub Actions, если автоматическое включение не разрешено.
