@@ -1,0 +1,65 @@
+# DEVOPS QUEST
+
+Персональная PWA для обучения DevOps: React + TypeScript + Vite, Supabase, Telegram Edge Functions. Обучение и лаборатории проходят в ChatGPT/Codex; приложение ведёт маршрут, время и результаты.
+
+## Запуск
+
+```sh
+npm ci
+npm run dev
+```
+
+Публичная конфигурация выделенного проекта находится в `src/public-config.ts`; локальные `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY` переопределяют её. Publishable key предназначен для браузера. Service role, bot token и webhook secret никогда не передаются frontend.
+
+```sh
+npm run typecheck
+npm run lint
+npm test
+npm run test:edge
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+`npm test`: доменные правила, PostgreSQL/PGlite, RLS, RPC, очередь синхронизации. `test:edge`: Deno с тестовым HTTP-адаптером. `test:e2e`: production preview, desktop и мобильный Chromium, включая Service Worker и офлайн-перезагрузку. Мобильный Chromium не заменяет проверку Safari и установки на настоящем iPhone.
+
+## Возможности
+
+- Пять разделов, тёмный адаптивный интерфейс, manifest, иконки и кешируемая оболочка PWA.
+- 18 глав, 360 миссий, критерии и финальные боссы. Плановые даты, названия, задания и продолжительность редактируются.
+- Начальная позиция — Python №18. Предыдущие миссии не зачтены. Четыре статуса отделяют решение от проверки знаний.
+- Таймер с остановкой/продолжением, журнал, ручная корректировка, заметки, ошибки, GitHub-ссылки, результат проверки, JSON backup/import.
+- График 2/2 требует явной даты первой смены. Нормы рабочего, выходного и тяжёлого дня; отдых без переноса долгов.
+- Email/password Auth, отдельное локальное хранилище для каждого аккаунта, outbox UUID, блокировка версии и явное разрешение конфликтов. Обновление облачных данных каждые 15 секунд при открытом PWA.
+- Telegram: основные команды, inline-меню, таймер, статусы, заметки, пауза, график, настройки уведомлений. Одноразовый код привязки хранится как SHA-256, живёт 10 минут.
+- Cron каждую минуту; IANA, тихие часы, категории, opt-in, перенос на 30 минут, отдых сегодня, TTL, dedupe, bounded retry и остановка после блокировки бота.
+
+## Развёртывание
+
+Репозиторий: https://github.com/Andrey1904-dev/PWADevOps
+
+Целевой Pages URL: https://andrey1904-dev.github.io/PWADevOps/
+
+Vite автоматически использует имя репозитория из `GITHUB_REPOSITORY`; локальная сборка для Pages:
+
+```sh
+GITHUB_REPOSITORY=Andrey1904-dev/PWADevOps npm run build
+```
+
+Навигация хранится внутри приложения без вложенных URL, поэтому на Pages не нужны server rewrites. Workflow проверяет код, SQL-адаптер, Deno, production browser tests и публикует Pages. Если GitHub запрещает автоматическое включение Pages, владелец выбирает **Settings → Pages → Source: GitHub Actions** один раз.
+
+Supabase уже выделен: `okswmvxxoataxprjwzjv`, PostgreSQL 17. Миграции применяются по порядку, затем `supabase/seed.sql`. Seed повторяемый. Миграция Cron использует Vault: секрет генерируется внутри PostgreSQL, в код и журналы не выводится; worker проверяет хэш через закрытый RPC. Без Telegram Bot Token worker возвращает безопасный статус ожидания и ничего не отправляет.
+
+Подробности: [подключение и восстановление](docs/OPERATIONS.md), [архитектура и безопасность](docs/ARCHITECTURE.md), [проверки и ограничения](docs/VERIFICATION.md).
+
+## Подключение Telegram
+
+Через Supabase Dashboard → Edge Functions → Secrets задайте `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` (случайный секрет) и `PWA_URL` (URL выше). Не отправляйте значения в чат, Git или CLI-аргументы. `SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY` предоставляет Edge Runtime.
+
+Запустите `scripts/configure-telegram.ts` в окружении с безопасно подключёнными переменными. Он устанавливает webhook с secret header и команды, не выводя токен. После этого войдите в PWA → синхронизируйте профиль → получите код → `/start КОД` в личном чате с ботом. Укажите IANA timezone и дату первой смены; отдельно включите уведомления.
+
+## Границы готовности
+
+Токен Telegram ещё не предоставлен: ответы настоящего бота, доставка сообщений и PWA ↔ настоящий Telegram не проверены. Дата первой смены и часовой пояс не угадываются. Установка на iPhone требует пользовательской проверки. Бесплатные тарифы имеют лимиты, гарантии бесплатной эксплуатации нет.
+
+Telegram Bot API не даёт идемпотентный ключ отправки: после неоднозначного сетевого таймаута сообщение отмечается failed без слепого повтора. Это предотвращает вероятные дубли ценой возможного пропуска; строгая exactly-once доставка внешнего сообщения не заявляется.
