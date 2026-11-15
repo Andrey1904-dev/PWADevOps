@@ -67,7 +67,11 @@ try {
         .getByRole("heading", { name: "Каждый шаг — ближе к цели." })
         .waitFor();
       report.real_password_login = true;
-      await page.getByRole("combobox").selectOption("in_progress");
+      const wanted =
+        (await page.getByRole("combobox").inputValue()) === "in_progress"
+          ? "solved"
+          : "in_progress";
+      await page.getByRole("combobox").selectOption(wanted);
       await page.waitForResponse(
         (r) => r.url().includes("/rpc/apply_operation") && r.status() === 200,
       );
@@ -75,7 +79,7 @@ try {
       await page
         .getByRole("heading", { name: "Каждый шаг — ближе к цели." })
         .waitFor();
-      if ((await page.getByRole("combobox").inputValue()) !== "in_progress")
+      if ((await page.getByRole("combobox").inputValue()) !== wanted)
         throw Error("Progress reload failed");
       report.real_progress_persisted = true;
       report.session_restored_after_reload = true;
@@ -94,14 +98,17 @@ try {
         .waitFor();
       await logoutResponse;
       report.logout_gate = true;
-      const denied = await fetch(api + "/rest/v1/profiles?select=id", {
-        headers: {
-          apikey: key,
-          Authorization: "Bearer " + oldSession.access_token,
+      const denied = await page.evaluate(
+        async ({ api, key, token }) => {
+          const r = await fetch(api + "/rest/v1/profiles?select=id", {
+            headers: { apikey: key, Authorization: "Bearer " + token },
+          });
+          const body = await r.json();
+          return { ok: r.ok, empty: Array.isArray(body) && body.length === 0 };
         },
-      });
-      const deniedBody = await denied.json();
-      if (denied.ok && (!Array.isArray(deniedBody) || deniedBody.length))
+        { api, key, token: oldSession.access_token },
+      );
+      if (denied.ok && !denied.empty)
         throw Error("Old JWT still reads private data");
       report.old_jwt_data_denied = true;
       await page.evaluate((session) => {

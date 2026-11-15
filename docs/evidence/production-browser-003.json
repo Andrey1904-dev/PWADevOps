@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "real_auth_requests": true,
+  "checked_at": "2026-11-15T19:21:02.039Z",
+  "reports": [
+    {
+      "name": "desktop",
+      "url": "https://andrey1904-dev.github.io/PWADevOps/",
+      "build": "e4e0dda27865b4e21e6ddf3c06d3b242ed4beb4d",
+      "http": 200,
+      "public_gate": true,
+      "layout_fits": true,
+      "javascript_errors": [],
+      "wrong_password_denied": true,
+      "real_password_login": true,
+      "real_progress_persisted": true,
+      "session_restored_after_reload": true,
+      "logout_gate": true,
+      "old_jwt_data_denied": true,
+      "revoked_session_gate": true,
+      "offline_auth_shell": true
+    },
+    {
+      "name": "mobile",
+      "url": "https://andrey1904-dev.github.io/PWADevOps/",
+      "build": "e4e0dda27865b4e21e6ddf3c06d3b242ed4beb4d",
+      "http": 200,
+      "public_gate": true,
+      "layout_fits": true,
+      "javascript_errors": [],
+      "wrong_password_denied": true,
+      "real_password_login": true,
+      "real_progress_persisted": true,
+      "session_restored_after_reload": true,
+      "logout_gate": true,
+      "old_jwt_data_denied": true,
+      "revoked_session_gate": true,
+      "offline_auth_shell": true
+    }
+  ]
+}
