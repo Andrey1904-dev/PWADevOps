@@ -10,3 +10,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.link-telegram]
 verify_jwt = false
+
+[functions.telegram-auth]
+verify_jwt = false

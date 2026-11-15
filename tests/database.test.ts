@@ -14,7 +14,7 @@ async function asUser(id: string, sql: string) {
 }
 beforeAll(async () => {
   await db.exec(
-    `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated;insert into auth.users values('${uid}'),('${other}');`,
+    `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated;insert into auth.users values('${uid}'),('${other}');`,
   );
   for (const file of readdirSync("supabase/migrations")
     .sort()
@@ -113,4 +113,71 @@ describe("migration, ownership and transactional RPC", () => {
       (await db.query("select count(*)::int as n from study_sessions")).rows[0],
     ).toEqual({ n: 2 });
   });
+});
+it("rewards are idempotent across new operations and status toggles", async () => {
+  await db.exec(
+    `select award_achievements('${uid}');select award_achievements('${uid}')`,
+  );
+  expect(
+    (await asUser(uid, "select sum(xp)::int as xp from reward_events")).rows[0],
+  ).toEqual({ xp: 50 });
+  await expect(
+    asUser(
+      uid,
+      "insert into reward_events values('11111111-1111-4111-8111-111111111111','fake','1-18',200,now())",
+    ),
+  ).rejects.toThrow();
+  expect(
+    (await asUser(other, "select * from reward_events")).rows,
+  ).toHaveLength(0);
+});
+it("Mini App link cannot steal another profile and nonce is single use", async () => {
+  expect(
+    (await db.query(`select link_mini_app('${other}',42) as ok`)).rows[0],
+  ).toEqual({ ok: false });
+  expect(
+    (await db.query(`select link_mini_app('${uid}',42) as ok`)).rows[0],
+  ).toEqual({ ok: true });
+  expect(
+    (await db.query("select consume_mini_app_auth('signed-hash',42) as ok"))
+      .rows[0],
+  ).toEqual({ ok: true });
+  expect(
+    (await db.query("select consume_mini_app_auth('signed-hash',42) as ok"))
+      .rows[0],
+  ).toEqual({ ok: false });
+  await expect(
+    asUser(uid, "select consume_mini_app_auth('another',42)"),
+  ).rejects.toThrow();
+});
+it("old mission confirmation cannot change current mission", async () => {
+  const result = await db.query(
+    "select bot_action_guarded(42,999,'status','solved','1-17') as result",
+  );
+  expect(
+    (result.rows[0] as { result: { stale_action: boolean } }).result
+      .stale_action,
+  ).toBe(true);
+});
+it("revocation immediately blocks bound JWT reads and writes, including after relink", async () => {
+  const sid = "77777777-7777-4777-8777-777777777777";
+  const row = (
+    await db.query<{ connection_id: string }>(
+      "select connection_id from telegram_connections where chat_id=42",
+    )
+  ).rows[0];
+  await db.query(
+    `select register_mini_app_session('${sid}','${uid}',42,'${row.connection_id}')`,
+  );
+  await db.exec(`set request.jwt.claims='{"session_id":"${sid}"}'`);
+  expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(1);
+  await db.exec("set request.jwt.claims='{}'");
+  await asUser(uid, "select revoke_telegram_link()");
+  await db.exec(`set request.jwt.claims='{"session_id":"${sid}"}'`);
+  expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(0);
+  await expect(asUser(uid, "select ensure_profile()")).rejects.toThrow();
+  await db.query(`select link_mini_app('${uid}',42)`);
+  expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(0);
+  await db.exec("set request.jwt.claims='{}'");
+  expect((await asUser(uid, "select * from profiles")).rows).toHaveLength(1);
 });

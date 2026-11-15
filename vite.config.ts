@@ -6,7 +6,25 @@ const repo = process.env.GITHUB_REPOSITORY?.split("/")[1];
 export default defineConfig({
   test: { include: ["tests/**/*.test.ts"] },
   base: repo && !repo.endsWith(".github.io") ? `/${repo}/` : "/",
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: "supabase", test: /node_modules\/@supabase\// }],
+        },
+      },
+    },
+  },
   plugins: [
+    {
+      name: "release-marker",
+      transformIndexHtml(html) {
+        return html.replace(
+          "</head>",
+          `<meta name="devops-build" content="${process.env.GITHUB_SHA || "local"}"/></head>`,
+        );
+      },
+    },
     react(),
     tailwind(),
     VitePWA({

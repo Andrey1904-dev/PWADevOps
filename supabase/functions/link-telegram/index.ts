@@ -1,3 +1,5 @@
+import { createClient } from "npm:@supabase/supabase-js@2.119.0";
+import { publicConfig } from "../../../src/public-config.ts";
 import { db, json, hash } from "../_shared/platform.ts";
 export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return json({});
@@ -10,6 +12,13 @@ export const handler = async (req: Request): Promise<Response> => {
     req.headers.get("Authorization")?.replace(/^Bearer /, ""),
   );
   if (error || !user) return json({ error: "Unauthorized" }, 401);
+  const bearer = req.headers.get("Authorization") || "";
+  const scoped = createClient(publicConfig.url, publicConfig.publishableKey, {
+    global: { headers: { Authorization: bearer } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: status } = await scoped.rpc("mini_session_status");
+  if (!status?.allowed) return json({ error: "SESSION_REVOKED" }, 401);
   const { data: profile } = await client
     .from("profiles")
     .select("id")

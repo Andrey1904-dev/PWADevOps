@@ -120,3 +120,41 @@ it("keeps edits made while an operation is in flight", () => {
   const result = acknowledge(snapshot, current, { ...initial, version: 2 });
   expect(result).toEqual({ ...current, version: 2, queue: [pending] });
 });
+it("skips intermediate invalid timezone drafts but sends final valid snapshot", async () => {
+  const invalid = {
+    ...initial,
+    settings: { ...initial.settings, timezone: "Europ" },
+  };
+  const valid = {
+    ...initial,
+    settings: { ...initial.settings, timezone: "Europe/Moscow" },
+    queue: [
+      {
+        id: "draft",
+        kind: "settings" as const,
+        payload: { state: invalid },
+        baseVersion: 0,
+      },
+      {
+        id: "final",
+        kind: "settings" as const,
+        payload: {
+          state: {
+            ...initial,
+            settings: { ...initial.settings, timezone: "Europe/Moscow" },
+          },
+        },
+        baseVersion: 0,
+      },
+    ],
+  };
+  await sync(valid);
+  expect(mocks.rpc).not.toHaveBeenCalledWith(
+    "apply_operation",
+    expect.objectContaining({ operation_id: "draft" }),
+  );
+  expect(mocks.rpc).toHaveBeenCalledWith(
+    "apply_operation",
+    expect.objectContaining({ operation_id: "final" }),
+  );
+});

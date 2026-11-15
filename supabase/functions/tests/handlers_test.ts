@@ -120,6 +120,7 @@ Deno.test(
     const original = globalThis.fetch;
     let sends = 0;
     let callbacks = 0;
+    let edits = 0;
     const state = {
       current: "1-18",
       progress: {},
@@ -131,6 +132,7 @@ Deno.test(
       const url = String(input instanceof Request ? input.url : input);
       if (url.includes("api.telegram.org")) {
         if (url.endsWith("/sendMessage")) sends++;
+        if (url.endsWith("/editMessageText")) edits++;
         if (url.endsWith("/answerCallbackQuery")) callbacks++;
         return new Response(JSON.stringify({ ok: true, result: {} }), {
           headers: { "content-type": "application/json" },
@@ -180,7 +182,7 @@ Deno.test(
         }),
       );
       assert(response.status === 200);
-      assert(sends === 13);
+      assert(sends === 12 && edits === 1);
       assert(callbacks === 1);
     } finally {
       globalThis.fetch = original;
@@ -224,7 +226,13 @@ Deno.test(
           blocked = JSON.parse(String(init?.body)).blocked === true;
         result = { chat_id: 42, blocked: false };
       } else if (url.pathname.endsWith("/profiles"))
-        result = { state: { current: "1-18", sessions: [] } };
+        result = {
+          state: {
+            current: "1-18",
+            sessions: [],
+            settings: { workWindowStart: "00:00", workWindowEnd: "00:00" },
+          },
+        };
       else if (url.pathname.endsWith("/rpc/claim_notification")) result = true;
       else if (url.pathname.endsWith("/notification_jobs")) {
         if (method === "POST") {
@@ -289,7 +297,7 @@ Deno.test(
           },
         }),
       );
-      assert(response.status === 200 && sends === 1 && dbCalls === 0);
+      assert(response.status === 200 && sends === 1 && dbCalls === 1);
     } finally {
       globalThis.fetch = original;
     }

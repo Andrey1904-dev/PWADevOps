@@ -1,3 +1,4 @@
+import { notificationMenu } from "../_shared/bot-ui.ts";
 import {
   db,
   json,
@@ -55,7 +56,16 @@ export const handler = async (req: Request): Promise<Response> => {
     }
     if (quiet(local.time, n.quiet_start.slice(0, 5), n.quiet_end.slice(0, 5)))
       continue;
-    const kind = dayType(local.date, s.first_shift);
+    const weekday = new Date(local.date + "T12:00:00Z").getUTCDay();
+    if (n.weekdays && !n.weekdays.includes(weekday)) continue;
+    const kind =
+      p?.state.settings?.shiftOverrides?.[local.date] ||
+      dayType(local.date, s.first_shift);
+    if (kind === "work") {
+      const start = p?.state.settings?.workWindowStart;
+      const end = p?.state.settings?.workWindowEnd;
+      if (!start || !end || quiet(local.time, start, end)) continue;
+    }
     const times = kind === "work" ? n.work_times : n.rest_times;
     const candidates: {
       category: string;
@@ -138,23 +148,21 @@ export const handler = async (req: Request): Promise<Response> => {
           p?.state.sessions?.some((x: any) => x.date === local.date)
         ),
     ))
-      await client
-        .from("notification_jobs")
-        .upsert(
-          {
-            user_id: n.user_id,
-            category: candidate.category,
-            dedupe_key: `${n.user_id}:${candidate.category}:${candidate.key}`,
-            due_at: now.toISOString(),
-            expires_at: new Date(+now + 5 * 60000).toISOString(),
-            payload: {
-              chat_id: c.chat_id,
-              kind: candidate.kind,
-              text: `DEVOPS QUEST: ${candidate.text}`,
-            },
+      await client.from("notification_jobs").upsert(
+        {
+          user_id: n.user_id,
+          category: candidate.category,
+          dedupe_key: `${n.user_id}:${candidate.category}:${candidate.key}`,
+          due_at: now.toISOString(),
+          expires_at: new Date(+now + 5 * 60000).toISOString(),
+          payload: {
+            chat_id: c.chat_id,
+            kind: candidate.kind,
+            text: `DEVOPS QUEST: ${candidate.text}`,
           },
-          { onConflict: "dedupe_key", ignoreDuplicates: true },
-        );
+        },
+        { onConflict: "dedupe_key", ignoreDuplicates: true },
+      );
   }
   const { data: jobs } = await client
     .from("notification_jobs")
@@ -193,10 +201,29 @@ export const handler = async (req: Request): Promise<Response> => {
       client.from("profiles").select("state").eq("id", job.user_id).single(),
     ]);
     const wall = schedule?.timezone ? localParts(now, schedule.timezone) : null;
+    const workday =
+      wall &&
+      (profile?.state.settings?.shiftOverrides?.[wall.date] ||
+        dayType(wall.date, schedule.first_shift)) === "work";
+    const duringWork =
+      workday &&
+      (!profile?.state.settings?.workWindowStart ||
+        !profile?.state.settings?.workWindowEnd ||
+        quiet(
+          wall!.time,
+          profile.state.settings.workWindowStart,
+          profile.state.settings.workWindowEnd,
+        ));
     if (
+      duringWork ||
       !connection ||
       connection.blocked ||
       !pref?.enabled ||
+      (wall &&
+        pref?.weekdays &&
+        !pref.weekdays.includes(
+          new Date(wall.date + "T12:00:00Z").getUTCDay(),
+        )) ||
       !pref?.categories?.[job.category] ||
       schedule?.paused ||
       !wall ||
@@ -220,18 +247,7 @@ export const handler = async (req: Request): Promise<Response> => {
       const result = await telegram("sendMessage", {
         chat_id: connection.chat_id,
         text: job.payload.text,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "Начать", callback_data: "begin" },
-              { text: "Выполнено", callback_data: "done" },
-            ],
-            [
-              { text: "Отложить на 30 мин", callback_data: "snooze" },
-              { text: "Сегодня отдыхаю", callback_data: "rest" },
-            ],
-          ],
-        },
+        reply_markup: notificationMenu,
       });
       if (result.ok) {
         await client
@@ -242,6 +258,11 @@ export const handler = async (req: Request): Promise<Response> => {
           .from("notification_delivery_log")
           .insert({ user_id: job.user_id, job_id: job.id, result: "sent" });
       } else if (result.error_code === 403) {
+        await client.from("notification_delivery_log").insert({
+          user_id: job.user_id,
+          job_id: job.id,
+          result: "blocked_403",
+        });
         await client
           .from("telegram_connections")
           .update({ blocked: true })
@@ -251,18 +272,32 @@ export const handler = async (req: Request): Promise<Response> => {
           .update({ status: "cancelled" })
           .eq("id", job.id);
       } else {
+        await client.from("notification_delivery_log").insert({
+          user_id: job.user_id,
+          job_id: job.id,
+          result: "telegram_" + String(result.error_code || "error"),
+        });
         await client
           .from("notification_jobs")
           .update({
             status: job.attempts >= 2 ? "failed" : "pending",
             next_attempt_at: new Date(
               Date.now() +
-                Math.max(30, result.parameters?.retry_after || 0) * 1000,
+                Math.max(
+                  30 * 2 ** job.attempts,
+                  result.parameters?.retry_after || 0,
+                ) *
+                  1000,
             ).toISOString(),
           })
           .eq("id", job.id);
       }
     } catch {
+      await client.from("notification_delivery_log").insert({
+        user_id: job.user_id,
+        job_id: job.id,
+        result: "network_uncertain_no_retry",
+      });
       await client
         .from("notification_jobs")
         .update({ status: "failed" })

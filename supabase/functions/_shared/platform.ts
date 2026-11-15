@@ -10,6 +10,7 @@ export const json = (body: unknown, status = 200) =>
     status,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       "Access-Control-Allow-Origin":
         Deno.env.get("PWA_ORIGIN") ||
         new URL(

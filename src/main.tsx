@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Terminal,
@@ -23,7 +23,7 @@ import {
   statusLabels,
   type MissionStatus,
 } from "./catalog";
-import { dayType, elapsed, localParts } from "./domain";
+import { elapsed, localParts } from "./domain";
 import {
   readState,
   persist,
@@ -33,6 +33,17 @@ import {
   type State,
   type Progress,
 } from "./store";
+import { telegramApp, telegramSession, checkMiniSession } from "./telegram";
+import { ErrorBoundary } from "./ErrorBoundary";
+import {
+  adaptivePlan,
+  nextShifts,
+  shift,
+  recommendedMinutes,
+  addDays,
+} from "./adaptive";
+import { gameStats } from "./game";
+import { useRegisterSW } from "virtual:pwa-register/react";
 import "./style.css";
 import { validateImport } from "./validation";
 const tabs = [
@@ -51,7 +62,24 @@ const icons = [
 ];
 function App() {
   const [s, setS] = useState(() => readState());
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(
+    () =>
+      (
+        ({
+          plan: 1,
+          calendar: 2,
+          stats: 3,
+          settings: 4,
+          reminders: 4,
+          boss: 1,
+        }) as Record<string, number>
+      )[new URLSearchParams(location.search).get("screen") || ""] || 0,
+  );
+  const [miniStatus, setMiniStatus] = useState(telegramApp() ? "loading" : "");
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
   const [message, setMessage] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
   const [now, setNow] = useState(Date.now());
@@ -62,6 +90,47 @@ function App() {
   const [user, setUser] = useState("");
   const [userId, setUserId] = useState("local");
   const [busy, setBusy] = useState(false);
+  const [loadingAccount, setLoadingAccount] = useState(false);
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  useEffect(() => {
+    if (!user || !supabase) {
+      setTelegramLinked(false);
+      return;
+    }
+    const client = supabase;
+    const check = () => {
+      void client
+        .from("telegram_connections")
+        .select("chat_id")
+        .eq("user_id", userId)
+        .maybeSingle()
+        .then(({ data }) => setTelegramLinked(!!data));
+    };
+    check();
+    const timer = setInterval(check, 15000);
+    return () => clearInterval(timer);
+  }, [user, userId]);
+  useEffect(() => {
+    if (!telegramApp() || !user) return;
+    const check = () => {
+      if (document.visibilityState === "hidden" || !navigator.onLine) return;
+      void checkMiniSession().then((valid) => {
+        if (!valid) {
+          setMiniStatus("link_required");
+          setMessage("Привязка отозвана. Mini App-сессия завершена.");
+        }
+      });
+    };
+    const timer = setInterval(check, 5000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    check();
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [user, userId]);
   const currentUser = useRef(userId);
   currentUser.current = userId;
   const chapters = baseChapters.map((c) => ({
@@ -96,7 +165,40 @@ function App() {
       return new Date().toLocaleDateString("en-CA");
     }
   })();
-  const day = dayType(today, s.settings.anchor);
+  const game = gameStats(s, today);
+  const day = shift(s, today);
+  const personalPlan = useMemo(() => adaptivePlan(s, today, 560), [s, today]);
+  const todayPlan = personalPlan[0];
+  const nearest = nextShifts(s, today);
+  useEffect(() => {
+    const app = telegramApp();
+    if (!app) return;
+    setMiniStatus("loading");
+    app.ready();
+    app.expand();
+    const theme = () => {
+      document.documentElement.dataset.telegramTheme = app.colorScheme;
+      app.setHeaderColor(app.colorScheme === "light" ? "#f2f5fa" : "#0b1016");
+      app.setBackgroundColor(
+        app.colorScheme === "light" ? "#f2f5fa" : "#0b1016",
+      );
+    };
+    theme();
+    app.onEvent("themeChanged", theme);
+    telegramSession()
+      .then((status) => setMiniStatus(status))
+      .catch((e) => setMiniStatus(e.message));
+    return () => app.offEvent("themeChanged", theme);
+  }, []);
+  useEffect(() => {
+    const app = telegramApp();
+    if (!app) return;
+    const back = () => setTab(0);
+    if (tab) app.BackButton.show();
+    else app.BackButton.hide();
+    app.BackButton.onClick(back);
+    return () => app.BackButton.offClick(back);
+  }, [tab]);
   const pct = Math.round((verified / 360) * 100);
   const bosses = Object.entries(s.progress).filter(
     ([id, p]) => id.endsWith("-20") && p.status === "verified",
@@ -131,7 +233,16 @@ function App() {
           : "Локальный режим: Supabase не подключён",
       );
     } catch (e) {
-      setMessage((e as Error).message);
+      const reason = (e as Error).message;
+      setMessage(
+        /[а-я]/i.test(reason)
+          ? reason
+          : "Синхронизация временно недоступна. Проверьте соединение и настройки.",
+      );
+      if (telegramApp())
+        void checkMiniSession().then((valid) => {
+          if (!valid) setMiniStatus("link_required");
+        });
     } finally {
       setBusy(false);
     }
@@ -164,6 +275,7 @@ function App() {
         if (currentUser.current !== scope) {
           currentUser.current = scope;
           setS(readState(scope));
+          setLoadingAccount(scope !== "local");
         }
         setUserId(scope);
       });
@@ -171,7 +283,12 @@ function App() {
     }
   }, []);
   useEffect(() => {
-    if (online && user && !busy && s.queue.length) {
+    if (loadingAccount && online && user && !busy) {
+      void synchronize().finally(() => setLoadingAccount(false));
+    }
+  }, [loadingAccount, online, user, busy]);
+  useEffect(() => {
+    if (online && user && !busy && !loadingAccount && s.queue.length) {
       const t = setTimeout(synchronize, 1500);
       return () => clearTimeout(t);
     }
@@ -243,7 +360,21 @@ function App() {
             },
           })
         : await supabase.auth.signInWithPassword({ email, password });
-    setMessage(error?.message || "Проверьте почту или войдите в аккаунт");
+    setMessage(
+      error
+        ? (
+            {
+              invalid_credentials: "Неверная почта или пароль.",
+              email_not_confirmed: "Подтвердите почту перед входом.",
+              over_email_send_rate_limit:
+                "Письма запрашиваются слишком часто. Повторите позже.",
+            } as Record<string, string>
+          )[error.code || ""] ||
+            "Не удалось войти или создать аккаунт. Проверьте почту и пароль."
+        : mode === "signup"
+          ? "Подтвердите почту, затем вернитесь сюда и войдите."
+          : "Вы вошли в аккаунт.",
+    );
   }
   const card = (
     title: string,
@@ -260,6 +391,18 @@ function App() {
       <small>{sub}</small>
     </article>
   );
+  if (miniStatus === "loading" || (loadingAccount && online))
+    return (
+      <div className="connection-screen" role="status">
+        <Terminal size={36} />
+        <h1>DEVOPS QUEST</h1>
+        <p>
+          {miniStatus === "loading"
+            ? "Подключаем защищённую сессию Telegram…"
+            : "Загружаем ваш прогресс…"}
+        </p>
+      </div>
+    );
   return (
     <div className="app">
       <aside>
@@ -269,7 +412,7 @@ function App() {
           </span>
           <span>
             DEVOPS<span className="cyan"> QUEST</span>
-            <small>ENGINEER YOUR FUTURE</small>
+            <small>ПУТЬ К НОВОМУ УРОВНЮ</small>
           </span>
         </a>
         <div className="workspace">ЛИЧНОЕ ПРОСТРАНСТВО</div>
@@ -314,13 +457,15 @@ function App() {
           <div className="breadcrumb">
             МОЙ ПУТЬ <ChevronRight size={13} /> {tabs[tab]}
           </div>
-          <button className="sync" onClick={synchronize}>
+          <button className="sync" disabled={busy} onClick={synchronize}>
             <Wifi size={14} />
-            {!online
-              ? "Офлайн"
-              : supabase
-                ? `${s.queue.length} в очереди`
-                : "Локальный режим"}
+            {busy
+              ? "Синхронизация…"
+              : !online
+                ? "Офлайн"
+                : supabase
+                  ? `${s.queue.length} в очереди`
+                  : "Локальный режим"}
           </button>
         </header>
         <div className="content">
@@ -342,6 +487,41 @@ function App() {
               })}
             </span>
           </div>
+          {needRefresh && (
+            <div className="notice">
+              Доступна новая версия.{" "}
+              <button
+                disabled={!!s.queue.length || !!s.active}
+                onClick={() => updateServiceWorker(true)}
+              >
+                Обновить приложение
+              </button>
+              {s.queue.length > 0 && (
+                <small>Сначала синхронизируйте изменения.</small>
+              )}
+            </div>
+          )}
+          {miniStatus === "link_required" && (
+            <section className="mini-welcome panel">
+              <span className="eyebrow">TELEGRAM MINI APP</span>
+              <h2>Твой путь инженера — здесь.</h2>
+              <p>
+                Войди в существующий аккаунт в настройках и свяжи Telegram.
+                Прогресс PWA сохранится.
+              </p>
+              <button className="primary" onClick={() => setTab(4)}>
+                Войти и связать аккаунт
+              </button>
+            </section>
+          )}
+          {miniStatus &&
+            !["link_required", "authenticated", "linked", "outside"].includes(
+              miniStatus,
+            ) && (
+              <p role="alert" className="notice">
+                {miniStatus}
+              </p>
+            )}
           {message && (
             <div
               role="status"
@@ -419,8 +599,32 @@ function App() {
                     <span className="cursor">_</span>
                   </code>
                   <span className="terminal-footer">
-                    ● SYSTEM READY <span>YOUR JOURNEY IS RUNNING</span>
+                    ● СИСТЕМА ГОТОВА <span>ОБУЧЕНИЕ ПРОДОЛЖАЕТСЯ</span>
                   </span>
+                </div>
+              </section>
+              <section className="player-card">
+                <div className="level-orb">
+                  {game.level}
+                  <small>УРОВЕНЬ</small>
+                </div>
+                <div className="player-xp">
+                  <div>
+                    <h3>Инженер в развитии</h3>
+                    <b>{game.xp} XP</b>
+                  </div>
+                  <div className="bar">
+                    <i style={{ width: `${game.levelProgress}%` }} />
+                  </div>
+                  <small>
+                    Ещё {game.next} XP до уровня {game.level + 1} · награды за
+                    выполненные миссии
+                  </small>
+                </div>
+                <div className="streak">
+                  <Flame size={21} />
+                  <b>{game.streak}</b>
+                  <small>дней практики</small>
                 </div>
               </section>
               <div className="metrics">
@@ -596,16 +800,16 @@ function App() {
                   <div className="plan-item">
                     <span className="step">01</span>
                     <div>
-                      <b>Одна миссия, один шаг вперёд</b>
+                      <b>Следующее занятие · миссия {todayPlan.missionId}</b>
                       <p>
                         {s.restDate === today
                           ? "Сегодня отдых"
                           : s.settings.paused
                             ? "Обучение на паузе"
                             : s.heavyDate === today
-                              ? `Лёгкий ориентир: ${s.settings.heavy} минут`
+                              ? `Лёгкий ориентир: ${recommendedMinutes(s, today)} минут`
                               : day
-                                ? `Ориентир: ${day === "work" ? s.settings.work : s.settings.rest} минут`
+                                ? `Ориентир: ${todayPlan.minutes} минут · ${todayPlan.activity === "theory" ? "теория и короткие задачи" : todayPlan.activity === "review" ? "повторение; босс ждёт выходного" : "практика и лаборатории"}`
                                 : "Укажите первую рабочую смену в настройках"}
                       </p>
                     </div>
@@ -617,16 +821,65 @@ function App() {
                       <p>Запиши выводы и проверь решение</p>
                     </div>
                   </div>
+                  <p className="muted">
+                    Ближайшая смена: {nearest.work} · выходной: {nearest.rest}.
+                    Цель 10–12 часов в неделю — ориентир, а не долг.
+                  </p>
                   <div className="actions">
                     <button
                       onClick={() =>
                         change(
-                          (v) => ({ ...v, heavyDate: today, restDate: "" }),
+                          (v) => ({
+                            ...v,
+                            energy: { ...v.energy, [today]: "low" },
+                            heavyDate: today,
+                            restDate: "",
+                          }),
                           "settings",
                         )
                       }
                     >
-                      Тяжёлый день
+                      Сегодня мало сил
+                    </button>
+                    <button
+                      onClick={() => {
+                        const target =
+                          mission.number === 20
+                            ? personalPlan
+                                .slice(1)
+                                .find((p) => p.type === "rest")?.date ||
+                              addDays(today, 1)
+                            : addDays(today, 1);
+                        change(
+                          (v) => ({
+                            ...v,
+                            deferred: { ...v.deferred, [v.current]: target },
+                            scheduledMissions: {
+                              ...v.scheduledMissions,
+                              [target]: v.current,
+                            },
+                          }),
+                          "settings",
+                        );
+                        setMessage("Миссия перенесена. XP сохранён.");
+                      }}
+                    >
+                      Перенести
+                    </button>
+                    <button
+                      onClick={() =>
+                        change(
+                          (v) => ({
+                            ...v,
+                            energy: { ...v.energy, [today]: "more" },
+                            heavyDate: "",
+                            restDate: "",
+                          }),
+                          "settings",
+                        )
+                      }
+                    >
+                      Есть время на большее
                     </button>
                     <button
                       onClick={() =>
@@ -661,98 +914,132 @@ function App() {
             </>
           )}
           {tab === 1 && (
-            <div className="two-cols curriculum">
-              <section className="panel">
-                {chapters.map((c) => (
-                  <button
-                    className={`chapter-row ${selected === c.id ? "chosen" : ""}`}
-                    key={c.id}
-                    onClick={() => setSelected(c.id)}
-                  >
-                    <span className="step">
-                      {String(c.id).padStart(2, "0")}
-                    </span>
-                    <div>
+            <>
+              <section className="skill-map" aria-label="Карта развития DevOps">
+                {chapters.map((c) => {
+                  const done = c.missions.filter(
+                    (m) => s.progress[m.id]?.status === "verified",
+                  ).length;
+                  return (
+                    <button
+                      key={c.id}
+                      className={selected === c.id ? "selected" : ""}
+                      onClick={() => setSelected(c.id)}
+                    >
+                      <span className="map-node">
+                        {done === 20 ? "✓" : String(c.id).padStart(2, "0")}
+                      </span>
                       <b>{c.title}</b>
-                      <small>{c.month} · 20 миссий</small>
-                    </div>
-                    <ChevronRight size={16} />
-                  </button>
-                ))}
+                      <small>
+                        {done}/20 проверено · {c.month}
+                      </small>
+                    </button>
+                  );
+                })}
               </section>
-              <section className="panel">
-                <h2>{chapters[selected - 1].title}</h2>
-                <details>
-                  <summary>Изменить главу и даты</summary>
-                  {(
-                    ["title", "month", "criteria", "boss", "duration"] as const
-                  ).map((k) => (
-                    <label key={k}>
-                      {
-                        {
-                          title: "Название",
-                          month: "Плановый месяц",
-                          criteria: "Критерии освоения",
-                          boss: "Финальный босс",
-                          duration: "Продолжительность в днях",
-                        }[k]
-                      }
-                      <input
-                        type={
-                          k === "month"
-                            ? "month"
-                            : k === "duration"
-                              ? "number"
-                              : "text"
-                        }
-                        value={
-                          s.overrides?.["chapter-" + selected]?.[k] ??
-                          (k === "duration" ? 30 : chapters[selected - 1][k])
-                        }
-                        onChange={(e) =>
-                          change((v) => ({
-                            ...v,
-                            overrides: {
-                              ...v.overrides,
-                              ["chapter-" + selected]: {
-                                ...v.overrides?.["chapter-" + selected],
-                                [k]:
-                                  k === "duration"
-                                    ? Number(e.target.value)
-                                    : e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                    </label>
+              <div className="two-cols curriculum">
+                <section className="panel">
+                  {chapters.map((c) => (
+                    <button
+                      className={`chapter-row ${selected === c.id ? "chosen" : ""}`}
+                      key={c.id}
+                      onClick={() => setSelected(c.id)}
+                    >
+                      <span className="step">
+                        {String(c.id).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <b>{c.title}</b>
+                        <small>{c.month} · 20 миссий</small>
+                      </div>
+                      <ChevronRight size={16} />
+                    </button>
                   ))}
-                </details>
-                <p className="muted">
-                  Критерии: {chapters[selected - 1].criteria}. Объясните
-                  решение, продемонстрируйте работу и восстановление после
-                  ошибки.
-                </p>
-                <p className="cyan">Босс: {chapters[selected - 1].boss}</p>
-                {chapters[selected - 1].missions.map((m) => (
-                  <button
-                    className="mission-row"
-                    key={m.id}
-                    onClick={() => {
-                      change((v) => ({ ...v, current: m.id }));
-                      setTab(0);
-                    }}
-                  >
-                    <span>
-                      {m.number}. {m.title}
-                    </span>
-                    <small>
-                      {statusLabels[s.progress[m.id]?.status || "not_started"]}
-                    </small>
-                  </button>
-                ))}
-              </section>
-            </div>
+                </section>
+                <section className="panel">
+                  <h2>{chapters[selected - 1].title}</h2>
+                  <details>
+                    <summary>Изменить главу и даты</summary>
+                    {(
+                      [
+                        "title",
+                        "month",
+                        "criteria",
+                        "boss",
+                        "duration",
+                      ] as const
+                    ).map((k) => (
+                      <label key={k}>
+                        {
+                          {
+                            title: "Название",
+                            month: "Плановый месяц",
+                            criteria: "Критерии освоения",
+                            boss: "Финальный босс",
+                            duration: "Продолжительность в днях",
+                          }[k]
+                        }
+                        <input
+                          type={
+                            k === "month"
+                              ? "month"
+                              : k === "duration"
+                                ? "number"
+                                : "text"
+                          }
+                          value={
+                            s.overrides?.["chapter-" + selected]?.[k] ??
+                            (k === "duration" ? 30 : chapters[selected - 1][k])
+                          }
+                          onChange={(e) =>
+                            change((v) => ({
+                              ...v,
+                              overrides: {
+                                ...v.overrides,
+                                ["chapter-" + selected]: {
+                                  ...v.overrides?.["chapter-" + selected],
+                                  [k]:
+                                    k === "duration"
+                                      ? Number(e.target.value)
+                                      : e.target.value,
+                                },
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                    ))}
+                  </details>
+                  <p className="muted">
+                    Критерии: {chapters[selected - 1].criteria}. Объясните
+                    решение, продемонстрируйте работу и восстановление после
+                    ошибки.
+                  </p>
+                  <p className="cyan">Босс: {chapters[selected - 1].boss}</p>
+                  {chapters[selected - 1].missions.map((m) => (
+                    <button
+                      className="mission-row"
+                      key={m.id}
+                      onClick={() => {
+                        change((v) => ({ ...v, current: m.id }));
+                        setTab(0);
+                      }}
+                    >
+                      <span>
+                        {m.number}. {m.title}
+                      </span>
+                      <small>
+                        {
+                          statusLabels[
+                            s.progress[m.id]?.status || "not_started"
+                          ]
+                        }
+                      </small>
+                    </button>
+                  ))}
+                </section>
+              </div>
+            </>
           )}
           {tab === 2 && (
             <section className="panel">
@@ -775,22 +1062,18 @@ function App() {
                 </div>
               </div>
               <p className="muted">
-                Пропуски не переносятся в долг. Рабочий цикл рассчитывается
-                только после указания первой смены.
+                Пропуски не переносятся в долг. Подтверждённый цикл начинается
+                17.11.2026. Невыполненная текущая миссия остаётся первым
+                следующим шагом без потери XP.
               </p>
               <div className="calendar">
                 {Array.from({ length: 28 }, (_, i) => {
                   const d = new Date(today + "T12:00:00Z");
                   d.setUTCDate(d.getUTCDate() + i + calendarOffset);
                   const date = d.toISOString().slice(0, 10);
-                  const kind = dayType(date, s.settings.anchor);
-                  const planned =
-                    s.plans?.[date] ??
-                    (kind === "work"
-                      ? s.settings.work
-                      : kind === "rest"
-                        ? s.settings.rest
-                        : 0);
+                  const kind = shift(s, date);
+                  const plannedTask = personalPlan.find((p) => p.date === date);
+                  const planned = recommendedMinutes(s, date);
                   const total = s.sessions
                     .filter((x) => x.date === date)
                     .reduce((n, x) => n + x.seconds, 0);
@@ -821,6 +1104,88 @@ function App() {
                                 ? `${planned} мин · план`
                                 : "—"}
                       </small>
+                      {plannedTask && (
+                        <small>
+                          {
+                            (
+                              {
+                                theory: "Теория",
+                                lab: "Лаборатория",
+                                boss: "Босс",
+                                review: "Повторение",
+                                short: "Короткая задача",
+                                rest: "Отдых",
+                              } as Record<string, string>
+                            )[plannedTask.activity]
+                          }{" "}
+                          · {plannedTask.missionId}
+                        </small>
+                      )}
+                      <label>
+                        Тип дня
+                        <select
+                          aria-label={`Тип дня ${date}`}
+                          value={kind || "rest"}
+                          onChange={(e) =>
+                            settings("shiftOverrides", {
+                              ...s.settings.shiftOverrides,
+                              [date]: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="work">Рабочий</option>
+                          <option value="rest">Выходной</option>
+                        </select>
+                      </label>
+                      <label>
+                        Миссия
+                        <select
+                          aria-label={`Миссия ${date}`}
+                          value={
+                            s.scheduledMissions?.[date] ||
+                            plannedTask?.missionId ||
+                            s.current
+                          }
+                          onChange={(e) =>
+                            change(
+                              (v) => ({
+                                ...v,
+                                scheduledMissions: {
+                                  ...v.scheduledMissions,
+                                  [date]: e.target.value,
+                                },
+                                ...(e.target.value.endsWith("-20") &&
+                                kind === "work"
+                                  ? {
+                                      bossWorkdayConsent: {
+                                        ...v.bossWorkdayConsent,
+                                        [date]: true,
+                                      },
+                                    }
+                                  : {}),
+                              }),
+                              "settings",
+                            )
+                          }
+                        >
+                          {chapters
+                            .filter(
+                              (c) =>
+                                c.id ===
+                                  Number(
+                                    (plannedTask?.missionId || s.current).split(
+                                      "-",
+                                    )[0],
+                                  ) || c.id === chapter.id,
+                            )
+                            .flatMap((c) => c.missions)
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.id} · {m.title}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
                       <label>
                         План, мин
                         <input
@@ -871,7 +1236,21 @@ function App() {
                 {card("Боссы", bosses, "Проверенные испытания", Flame)}
               </div>
               <section className="panel">
-                <h3>Достижения</h3>
+                <h3>Достижения и нагрузка</h3>
+                <p>
+                  {game.xp} XP · Уровень {game.level} · Серия {game.streak} дней
+                </p>
+                <p className="muted">
+                  За 7 дней: {game.weekMinutes} / {s.settings.weeklyGoal || 660}{" "}
+                  минут. Пропуски не создают долг.
+                </p>
+                <div className="bar">
+                  <i
+                    style={{
+                      width: `${Math.min(100, (game.weekMinutes / (s.settings.weeklyGoal || 660)) * 100)}%`,
+                    }}
+                  />
+                </div>
                 <p className="muted">
                   {s.sessions.length
                     ? "✓ Первая практика"
@@ -882,6 +1261,28 @@ function App() {
                     : "○ Первое подтверждение"}{" "}
                   · {bosses ? "✓ Победитель босса" : "○ Победитель босса"}
                 </p>
+                <h3>История прогресса</h3>
+                {s.missionHistory?.length ? (
+                  <div className="progress-history">
+                    {[...s.missionHistory]
+                      .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
+                      .slice(0, 12)
+                      .map((h) => (
+                        <p key={h.id}>
+                          <span>{h.mission_id}</span>{" "}
+                          {statusLabels[h.new_status]}{" "}
+                          <small>
+                            {new Date(h.changed_at).toLocaleDateString("ru")}
+                          </small>
+                        </p>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="muted">
+                    История проверенных сервером изменений появится после
+                    синхронизации.
+                  </p>
+                )}
                 <h3>Журнал занятий</h3>
                 {s.sessions.length ? (
                   s.sessions.map((x) => (
@@ -996,7 +1397,7 @@ function App() {
                   Первая рабочая смена цикла 2/2
                   <input
                     type="date"
-                    value={s.settings.anchor}
+                    value={s.settings.anchor || "2026-11-17"}
                     onChange={(e) => settings("anchor", e.target.value)}
                   />
                 </label>
@@ -1042,6 +1443,21 @@ function App() {
                     />
                   </label>
                 ))}
+                <label>
+                  Недельная цель, минут
+                  <input
+                    type="number"
+                    min="60"
+                    max="2520"
+                    value={s.settings.weeklyGoal || 660}
+                    onChange={(e) =>
+                      settings(
+                        "weeklyGoal",
+                        Math.max(60, Math.min(2520, Number(e.target.value))),
+                      )
+                    }
+                  />
+                </label>
                 <label>
                   Тихие часы: начало
                   <input
@@ -1127,6 +1543,33 @@ function App() {
                   JSON
                 </button>
                 <h3>Telegram</h3>
+                {telegramApp() && (
+                  <>
+                    <p className="muted">
+                      {miniStatus === "authenticated" || miniStatus === "linked"
+                        ? "Telegram связан с этим аккаунтом."
+                        : "После входа свяжите этот аккаунт с Telegram. Дубликат профиля не создаётся."}
+                    </p>
+                    <button
+                      disabled={!user || busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          setMiniStatus(await telegramSession("link"));
+                          setMessage(
+                            "Аккаунт связан. При следующем запуске Mini App войдёт автоматически.",
+                          );
+                        } catch (e) {
+                          setMessage((e as Error).message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Связать текущий аккаунт с Telegram
+                    </button>
+                  </>
+                )}
                 <p className="muted">
                   Уведомления выключены до привязки и отдельного согласия.
                 </p>
@@ -1146,10 +1589,86 @@ function App() {
                 >
                   Получить одноразовый код
                 </button>
+                {telegramLinked && (
+                  <button
+                    onClick={async () => {
+                      if (!supabase) return;
+                      const { error } = await supabase.rpc(
+                        "revoke_telegram_link",
+                      );
+                      if (error) {
+                        setMessage("Не удалось отозвать привязку.");
+                        return;
+                      }
+                      setTelegramLinked(false);
+                      await checkMiniSession();
+                      setMiniStatus(telegramApp() ? "link_required" : "");
+                      setMessage(
+                        "Привязка отозвана. Новые автоматические входы запрещены.",
+                      );
+                    }}
+                  >
+                    Отозвать привязку Telegram
+                  </button>
+                )}
                 <h3>Уведомления</h3>
+                <p className="muted">
+                  В рабочие дни напоминания молчат, пока не указаны часы смены.
+                  В выходные используется полное расписание.
+                </p>
+                <label>
+                  Начало рабочей смены
+                  <input
+                    type="time"
+                    value={s.settings.workWindowStart || ""}
+                    onChange={(e) =>
+                      settings("workWindowStart", e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Конец рабочей смены
+                  <input
+                    type="time"
+                    value={s.settings.workWindowEnd || ""}
+                    onChange={(e) => settings("workWindowEnd", e.target.value)}
+                  />
+                </label>
+                {!telegramLinked && (
+                  <p className="muted">
+                    Сначала свяжите Telegram с аккаунтом. Уведомления требуют
+                    отдельного согласия.
+                  </p>
+                )}
+                <div className="weekday-picker">
+                  {["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"].map(
+                    (label, i) => (
+                      <button
+                        key={i}
+                        aria-pressed={(
+                          s.settings.weekdays || [0, 1, 2, 3, 4, 5, 6]
+                        ).includes(i)}
+                        onClick={() => {
+                          const days = s.settings.weekdays || [
+                            0, 1, 2, 3, 4, 5, 6,
+                          ];
+                          settings(
+                            "weekdays",
+                            days.includes(i)
+                              ? days.filter((d) => d !== i)
+                              : [...days, i],
+                          );
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ),
+                  )}
+                </div>
                 <label>
                   <input
                     type="checkbox"
+                    disabled={!telegramLinked && !s.settings.reminders}
                     checked={s.settings.reminders}
                     onChange={(e) => settings("reminders", e.target.checked)}
                   />{" "}
@@ -1240,6 +1759,8 @@ function App() {
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );

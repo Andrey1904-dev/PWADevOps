@@ -1,18 +1,22 @@
-# Фактический статус — 15.11.2026
+# Фактический статус ТЗ №002
 
-- Исходники опубликованы: https://github.com/Andrey1904-dev/PWADevOps
-- Целевой PWA: https://andrey1904-dev.github.io/PWADevOps/ — **пока HTTP 404, не опубликован**.
-- Причина: GitHub API и workflow configure-pages получают `403 Resource not accessible by integration` при первом создании Pages site. Проверки CI проходят, deploy блокируется внешними правами.
-- Действие владельца: https://github.com/Andrey1904-dev/PWADevOps/settings/pages → **Source: GitHub Actions**, затем запустить workflow Quality and Pages повторно. Source и base path уже подготовлены.
-- Supabase `okswmvxxoataxprjwzjv` подключён; 7 миграций, 18 глав, 360 миссий, RLS и серверные функции развёрнуты. Локальные имена миграций совпадают с фактической migration history.
-- Бот: https://t.me/PwaDevOps_Bot ; getMe успешен.
-- Webhook: https://okswmvxxoataxprjwzjv.supabase.co/functions/v1/telegram-webhook ; getWebhookInfo: pending=0, last_error отсутствует на момент проверки.
-- Команды зарегистрированы: /start /today /plan /progress /missions /mission /done /boss /week /stats /schedule /reminders /settings /help /begin /stop /note /status /pause /resume. Inline-меню и callback handling проверены HTTP-адаптером.
-- Cron `devops_quest_notifications` активен, каждую минуту; реальные HTTP-ответы worker — 200. Часы по умолчанию: 09:00, 13:00, 18:00, 21:30, пользовательский IANA timezone, opt-in, quiet hours, snooze, отдых и dedupe.
-- Telegram token и webhook secret сохранены в **Supabase Vault**, не Edge Function Secrets: подключённый инструмент не умеет изменять Edge Secrets. Server-only fallback работает; Edge Secrets можно добавить позже, они будут иметь приоритет.
-- Подтверждённых личных chat ID пока нет. Тестовая отправка пользователю и персональная доставка по расписанию не объявляются проверенными. Нужны вход в PWA, одноразовая привязка, дата первой смены, timezone и явное согласие.
-- Проверки: 24 local unit/database/outbox, 9 Edge adapter, 6 desktop/mobile production browser; 24 live assertions Auth/RLS/linking/state sync/Telegram API. Реальные пользовательские сообщения и установка на iPhone остаются на финальную проверку.
-- npm production audit: 0 vulnerabilities. Полный audit: 4 low в dev-зависимостях цепочки deepmerge/Workbox; critical/high/moderate=0.
-- Security advisor: 2 ожидаемых предупреждения о SECURITY DEFINER публичных authenticated RPC, ограничения и ownership проверены. Подробности в VERIFICATION.md.
+Production: https://andrey1904-dev.github.io/PWADevOps/ — опубликовано через GitHub Actions, HTTP 200.
 
-Система ещё не считается полностью опубликованной. Код и доступные серверные интеграции готовы; Pages требует изменения настройки владельцем, а пользовательская Telegram-доставка требует привязки и opt-in.
+GitHub: https://github.com/Andrey1904-dev/PWADevOps
+
+Новый релиз включает Telegram Mini App, автоматический вход в существующий Supabase user_id, отзываемые Mini App-сессии, XP ledger, историю, карту навыков и персональный календарь с подтверждённым началом 17.11.2026. Главная точка остаётся Python №18; миссии 1–17 не зачтены.
+
+Бот: https://t.me/PwaDevOps_Bot . Кнопка меню Telegram имеет тип web_app и ведёт в production. Обычное управление кнопками; в меню команд только /start. Сложные экраны открываются в приложении. Callback-ответы редактируют существующее сообщение; устаревшие кнопки не изменяют новую миссию.
+
+Сервер: Supabase okswmvxxoataxprjwzjv, Auth/RLS, Edge Functions, Cron каждую минуту. Token и webhook secret остаются в Vault, service_role доступен только Edge Runtime.
+
+## Что ещё требует пользователя
+
+1. Supabase Dashboard → Authentication → URL Configuration: Site URL и разрешённый Redirect URL установить в `https://andrey1904-dev.github.io/PWADevOps/`. Живая диагностика обнаружила, что production redirect пока не разрешён; текущие инструменты не предоставляют изменения Auth config. Password login и автоматический Mini App login работают, но возврат после подтверждения email требует этой настройки. До исправления после подтверждения письма можно вручную вернуться в PWA и войти.
+2. Открыть бота → «Начать» → войти в существующий аккаунт → «Связать текущий аккаунт с Telegram». Повторные открытия входят автоматически в тот же user_id. Если аккаунта ещё нет — один раз зарегистрироваться и подтвердить email.
+3. Выбрать собственный IANA timezone. Дата цикла уже подтверждена: 17/18 ноября рабочие, 19/20 выходные. Указать часы начала/конца смены для напоминаний в рабочие дни; до этого рабочие дни остаются тихими. Включить уведомления отдельным согласием.
+4. Подтвердить открытие на настоящем Telegram/iPhone и установку PWA через Safari. Мобильный Chromium и эмуляция Telegram API не заменяют эти проверки.
+
+Подтверждённого пользовательского chat ID на момент аудита нет: персональная отправка и фактическое получение уведомления пользователем не объявляются пройденными. Расписание сервера работает независимо от Mac; реальные запросы Cron к worker возвращают 200.
+
+Доказательства и ограничения: [AUDIT-002.md](AUDIT-002.md), `docs/evidence/`, GitHub Actions production-health artifact. Полностью принятым проект считается после перечисленных пользовательских проверок и доставки сообщения.
