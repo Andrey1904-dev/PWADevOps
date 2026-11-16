@@ -383,3 +383,22 @@ test("Telegram link API rate limits and network errors stay understandable", asy
     .click();
   await expect(page.getByRole("alert")).toContainText("Сетевая ошибка");
 });
+
+test("a blocked Telegram bot still allows revoking the existing link", async ({
+  page,
+}) => {
+  await page.route("**/rest/v1/telegram_connections?*", (r) =>
+    r.fulfill({ json: { chat_id: 42, blocked: true } }),
+  );
+  await page.goto("./");
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Telegram пока не подключён" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Отозвать привязку Telegram",
+      exact: true,
+    }),
+  ).toBeVisible();
+});

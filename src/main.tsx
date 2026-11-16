@@ -114,9 +114,11 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
   const [busy, setBusy] = useState(false);
   const [loadingAccount, setLoadingAccount] = useState(true);
   const [telegramLinked, setTelegramLinked] = useState(false);
+  const [telegramPresent, setTelegramPresent] = useState(false);
   useEffect(() => {
     if (!user || !supabase) {
       setTelegramLinked(false);
+      setTelegramPresent(false);
       return;
     }
     const client = supabase;
@@ -127,7 +129,10 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
         .eq("user_id", userId)
         .maybeSingle()
         .then(({ data, error }) => {
-          if (!error) setTelegramLinked(!!data && !data.blocked);
+          if (!error) {
+            setTelegramPresent(!!data);
+            setTelegramLinked(!!data && !data.blocked);
+          }
         });
     };
     check();
@@ -1692,7 +1697,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                   Уведомления выключены до привязки и отдельного согласия.
                 </p>
                 <TelegramLink linked={telegramLinked} userId={userId} />
-                {telegramLinked && (
+                {telegramPresent && (
                   <button
                     onClick={async () => {
                       if (!supabase) return;
@@ -1704,6 +1709,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                         return;
                       }
                       setTelegramLinked(false);
+                      setTelegramPresent(false);
                       await checkMiniSession();
                       setMiniStatus(telegramApp() ? "link_required" : "");
                       setMessage(
