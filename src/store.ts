@@ -88,7 +88,7 @@ export const initial: State = {
   timerSeconds: 0,
   settings: {
     anchor: "2026-11-17",
-    timezone: "",
+    timezone: "Asia/Yekaterinburg",
     work: 35,
     rest: 150,
     heavy: 12,
@@ -127,6 +127,9 @@ export function readState(scope = "local"): State {
       settings: {
         ...initial.settings,
         ...parsed?.settings,
+        timezone: parsed
+          ? (parsed.settings?.timezone ?? "")
+          : initial.settings.timezone,
         anchor: parsed?.settings?.anchor || initial.settings.anchor,
       },
     };
@@ -188,7 +191,11 @@ export async function sync(s: State): Promise<State> {
     ...initial,
     ...data.state,
     missionHistory: history || [],
-    settings: { ...initial.settings, ...data.state.settings },
+    settings: {
+      ...initial.settings,
+      ...data.state.settings,
+      timezone: data.state.settings?.timezone ?? "",
+    },
     rewardEvents: rewards || [],
     version: data.version,
     queue: [],

@@ -63,3 +63,15 @@ describe("sessions and catalog", () => {
     expect(chapters[17].month).toBe("2028-04");
   });
 });
+
+it("uses Yekaterinburg date at UTC midnight boundary and local reminder time", () => {
+  expect(
+    localParts(new Date("2026-11-15T19:00:00Z"), "Asia/Yekaterinburg"),
+  ).toMatchObject({ date: "2026-11-16", time: "00:00" });
+  expect(
+    localParts(new Date("2026-11-16T04:00:00Z"), "Asia/Yekaterinburg").time,
+  ).toBe("09:00");
+  expect(
+    localParts(new Date("2026-11-16T04:00:00Z"), "Europe/Moscow").time,
+  ).toBe("07:00");
+});

@@ -158,3 +158,24 @@ it("skips intermediate invalid timezone drafts but sends final valid snapshot", 
     expect.objectContaining({ operation_id: "final" }),
   );
 });
+
+it("defaults new users to Yekaterinburg while preserving existing choices and dates", () => {
+  expect(readState("new-user").settings.timezone).toBe("Asia/Yekaterinburg");
+  for (const timezone of ["Europe/Moscow", "", "Asia/Yekaterinburg"]) {
+    const saved = {
+      ...initial,
+      settings: { ...initial.settings, timezone },
+      sessions: [{ id: "session", seconds: 60, date: "2026-11-15", note: "" }],
+    };
+    persist(saved, "existing");
+    expect(readState("existing").settings.timezone).toBe(timezone);
+    expect(readState("existing").sessions).toEqual(saved.sessions);
+  }
+});
+it("keeps a legacy cloud profile without timezone unset", async () => {
+  mocks.single.mockResolvedValue({
+    data: { state: {}, version: 0 },
+    error: null,
+  });
+  expect((await sync(initial)).settings.timezone).toBe("");
+});

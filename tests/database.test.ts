@@ -291,3 +291,42 @@ describe("explicit Telegram confirmation", () => {
     );
   });
 });
+
+it("new profile default reaches schedule without modifying legacy profiles or progress", async () => {
+  const fresh = "abababab-abab-4bab-8bab-abababababab";
+  const before = await db.query(
+    "select id,state,version from profiles order by id",
+  );
+  const sessions = await db.query("select * from study_sessions order by id");
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/20261116064403_yekaterinburg_default.sql",
+      "utf8",
+    ),
+  );
+  await db.exec(
+    `insert into auth.users(id) values('${fresh}');insert into auth.sessions values('${fresh}','${fresh}');`,
+  );
+  await asUser(fresh, "select ensure_profile()");
+  expect(
+    (
+      await asUser(
+        fresh,
+        "select state#>>'{settings,timezone}' as timezone from profiles",
+      )
+    ).rows,
+  ).toEqual([{ timezone: "Asia/Yekaterinburg" }]);
+  expect(
+    (await asUser(fresh, "select timezone from schedule_settings")).rows,
+  ).toEqual([{ timezone: "Asia/Yekaterinburg" }]);
+  expect(
+    (
+      await db.query(
+        `select id,state,version from profiles where id<>'${fresh}' order by id`,
+      )
+    ).rows,
+  ).toEqual(before.rows);
+  expect(
+    (await db.query("select * from study_sessions order by id")).rows,
+  ).toEqual(sessions.rows);
+});

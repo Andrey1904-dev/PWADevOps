@@ -402,3 +402,25 @@ test("a blocked Telegram bot still allows revoking the existing link", async ({
     }),
   ).toBeVisible();
 });
+
+test("timezone choice persists without moving existing session dates", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Статистика", exact: true }).click();
+  await page.getByRole("button", { name: "Добавить 10 минут вручную" }).click();
+  const recorded = await page.getByLabel("Дата", { exact: true }).inputValue();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByLabel("Часовой пояс IANA").fill("Asia/Yekaterinburg");
+  await page.getByLabel("Часовой пояс IANA").blur();
+  await expect(
+    page.locator('#timezones option[value="Asia/Yekaterinburg"]'),
+  ).toHaveText("Екатеринбург (UTC+5)");
+  await page.reload();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await expect(page.getByLabel("Часовой пояс IANA")).toHaveValue(
+    "Asia/Yekaterinburg",
+  );
+  await page.getByRole("button", { name: "Статистика", exact: true }).click();
+  await expect(page.getByLabel("Дата", { exact: true })).toHaveValue(recorded);
+});

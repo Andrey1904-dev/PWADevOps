@@ -220,6 +220,16 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
       return new Date().toLocaleDateString("en-CA");
     }
   })();
+  const displayTimezone = (() => {
+    try {
+      new Intl.DateTimeFormat("ru", {
+        timeZone: s.settings.timezone || undefined,
+      });
+      return s.settings.timezone || undefined;
+    } catch {
+      return undefined;
+    }
+  })();
   const game = gameStats(s, today);
   const day = shift(s, today);
   const personalPlan = useMemo(() => adaptivePlan(s, today, 560), [s, today]);
@@ -489,6 +499,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                 day: "numeric",
                 month: "long",
                 year: "numeric",
+                timeZone: displayTimezone,
               })}
             </span>
           </div>
@@ -1086,8 +1097,10 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                         .filter((h) => h.mission_id === `${selected}-20`)
                         .map((h) => (
                           <p key={h.id}>
-                            {new Date(h.changed_at).toLocaleString("ru")} ·{" "}
-                            {statusLabels[h.new_status]}
+                            {new Date(h.changed_at).toLocaleString("ru", {
+                              timeZone: displayTimezone,
+                            })}{" "}
+                            · {statusLabels[h.new_status]}
                           </p>
                         ))
                     ) : (
@@ -1359,7 +1372,9 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                           <span>{h.mission_id}</span>{" "}
                           {statusLabels[h.new_status]}{" "}
                           <small>
-                            {new Date(h.changed_at).toLocaleDateString("ru")}
+                            {new Date(h.changed_at).toLocaleDateString("ru", {
+                              timeZone: displayTimezone,
+                            })}
                           </small>
                         </p>
                       ))}
@@ -1491,7 +1506,8 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                 <label>
                   Часовой пояс IANA
                   <input
-                    placeholder="Например, Europe/Moscow"
+                    placeholder="Например, Asia/Yekaterinburg"
+                    list="timezones"
                     value={s.settings.timezone}
                     onChange={(e) => {
                       settings("timezone", e.target.value);
@@ -1507,6 +1523,13 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                     }}
                   />
                 </label>
+                <datalist id="timezones">
+                  <option value="Asia/Yekaterinburg">
+                    Екатеринбург (UTC+5)
+                  </option>
+                  <option value="Europe/Moscow">Москва (UTC+3)</option>
+                  <option value="UTC">UTC</option>
+                </datalist>
                 {(["work", "rest", "heavy"] as const).map((k, i) => (
                   <label key={k}>
                     {
