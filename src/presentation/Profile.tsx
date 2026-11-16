@@ -37,7 +37,7 @@ export function Profile({
   return (
     <>
       <section className="profile-cinema">
-        <Art name="extras-1" />
+        <Art name="profile" />
         <div>
           <span className="eyebrow">ЛИЧНОЕ ДЕЛО · DEVOPS QUEST</span>
           <h2>{name}</h2>

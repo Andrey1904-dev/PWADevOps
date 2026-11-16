@@ -2,6 +2,36 @@
   "provenance": "Original imagegen artwork. Pillow only crops and compresses. Atlas tiles retain their native resolution; no upscaling. UI labels are HTML.",
   "assets": [
     {
+      "file": "public/art/profile-480.webp",
+      "source": "profile",
+      "size": [
+        480,
+        270
+      ],
+      "bytes": 17626,
+      "sha256": "10930f9e783304cefb21f41e47f1de73d60060461f7b04d9ee1a79b9ce33ae85"
+    },
+    {
+      "file": "public/art/profile-960.webp",
+      "source": "profile",
+      "size": [
+        960,
+        540
+      ],
+      "bytes": 56600,
+      "sha256": "e3236b7b2ec3df9dda1e8e3386a14cad48763a4f523efb84f949385a79111363"
+    },
+    {
+      "file": "public/art/profile-1600.webp",
+      "source": "profile",
+      "size": [
+        1600,
+        900
+      ],
+      "bytes": 126246,
+      "sha256": "5a13c70e474006fc56b8e976575bf9c8b3f5ffc4a3cc5428970da5443178aabe"
+    },
+    {
       "file": "public/art/auth-480.webp",
       "source": "auth",
       "size": [

@@ -34,7 +34,7 @@ export function Art({
   const [failed, setFailed] = useState(false);
   if (failed)
     return <span className={`art-fallback ${className}`} aria-hidden="true" />;
-  const large = name === "auth" || name === "hero";
+  const large = name === "auth" || name === "hero" || name === "profile";
   return (
     <img
       className={`quest-art ${className}`}
