@@ -1,3 +1,4 @@
+import { Career } from "./sysadmin/Career";
 import type { User } from "@supabase/supabase-js";
 import { TelegramLink } from "./TelegramLink";
 import { AuthGate } from "./auth/AuthGate";
@@ -69,6 +70,7 @@ const icons = [
   Settings,
 ];
 function App({ account, onLogout }: { account: User; onLogout: () => void }) {
+  const [careerTrack, setCareerTrack] = useState("devops");
   const [s, setS] = useState(() => readState(account.id));
   const [tab, setTab] = useState(
     () =>
@@ -550,6 +552,11 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
               {message} <span>×</span>
             </div>
           )}
+          <nav className="track-picker" aria-label="Карьерный трек">
+            {[["devops", "DevOps RPG"], ["sysadmin", "System Administrator"], ["shared", "Общие навыки"]].map(([id, title]) => <button key={id} aria-pressed={careerTrack === id} onClick={() => setCareerTrack(id)}>{title}</button>)}
+          </nav>
+          {careerTrack !== "devops" && <Career key={account.id + careerTrack} user={account.id} shared={careerTrack === "shared"} />}
+          <div hidden={careerTrack !== "devops"}>
           {tab === 0 && (
             <>
               <section className="hero">
@@ -1880,6 +1887,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
               </section>
             </div>
           )}
+          </div>
           <footer>
             <span>DEVOPS QUEST</span> Маленькие шаги. Настоящие навыки.{" "}
             <span className="green">● {online ? "В сети" : "Офлайн"}</span>

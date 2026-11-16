@@ -1,0 +1,63 @@
+.career {
+  max-width: 1100px;
+  margin: 1rem auto;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.career article {
+  border: 1px solid #33404b;
+  background: #111a23;
+  padding: clamp(12px, 3vw, 24px);
+  border-radius: 12px;
+  margin: 16px 0;
+}
+.career nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.career button {
+  margin: 6px 8px 6px 0;
+  white-space: normal;
+  min-height: 44px;
+}
+.career label {
+  display: block;
+  margin: 12px 0;
+}
+.career input,
+.career textarea {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+}
+.career textarea {
+  min-height: 130px;
+}
+.career-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 12px;
+}
+.career pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.career progress {
+  width: 100%;
+}
+.career code {
+  white-space: normal;
+}
+.track-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+.track-picker select {
+  max-width: 100%;
+  min-height: 44px;
+}
