@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { TelegramLink } from "./TelegramLink";
 import { AuthGate } from "./auth/AuthGate";
 import { bounded } from "./auth/validation";
 import React, { useEffect, useState, useRef, useMemo } from "react";
@@ -96,6 +97,13 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
   const [calendarOffset, setCalendarOffset] = useState(0);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    // AuthGate revalidates on returning from Telegram and remounts the protected app.
+    // Preserve the selected screen without retaining or bypassing a rejected session.
+    const url = new URL(window.location.href);
+    const screen = ["", "plan", "calendar", "stats", "settings"][tab];
+    if (screen) url.searchParams.set("screen", screen);
+    else url.searchParams.delete("screen");
+    window.history.replaceState(null, "", url);
   }, [tab]);
   const user = account.email || "";
   const userId = account.id;
@@ -115,14 +123,25 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
     const check = () => {
       void client
         .from("telegram_connections")
-        .select("chat_id")
+        .select("chat_id,blocked")
         .eq("user_id", userId)
         .maybeSingle()
-        .then(({ data }) => setTelegramLinked(!!data));
+        .then(({ data, error }) => {
+          if (!error) setTelegramLinked(!!data && !data.blocked);
+        });
     };
     check();
-    const timer = setInterval(check, 15000);
-    return () => clearInterval(timer);
+    const timer = setInterval(check, 5000);
+    const visible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, [user, userId]);
   useEffect(() => {
     if (!telegramApp() || !user) return;
@@ -1672,22 +1691,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                 <p className="muted">
                   Уведомления выключены до привязки и отдельного согласия.
                 </p>
-                <button
-                  onClick={async () => {
-                    if (!supabase || !user) {
-                      setMessage("Сначала подключите Supabase и войдите");
-                      return;
-                    }
-                    const { data, error } =
-                      await supabase.functions.invoke("link-telegram");
-                    setMessage(
-                      error?.message ||
-                        `Откройте бота и отправьте /start ${data.token} (действует 10 минут)`,
-                    );
-                  }}
-                >
-                  Получить одноразовый код
-                </button>
+                <TelegramLink linked={telegramLinked} userId={userId} />
                 {telegramLinked && (
                   <button
                     onClick={async () => {

@@ -27,8 +27,7 @@ Deno.test("webhook rejects missing or incorrect secret", async () => {
   );
 });
 Deno.test("scheduler rejects unauthorized caller", async () =>
-  assert((await worker(new Request("https://local"))).status === 401),
-);
+  assert((await worker(new Request("https://local"))).status === 401));
 Deno.test("link preflight succeeds without exposing secrets", async () => {
   const r = await link(new Request("https://local", { method: "OPTIONS" }));
   assert(r.status === 200);
@@ -182,7 +181,7 @@ Deno.test(
         }),
       );
       assert(response.status === 200);
-      assert(sends === 12 && edits === 1);
+      assert(sends === 13 && edits === 1); // 12 replies + removal of legacy reply keyboard on /start
       assert(callbacks === 1);
     } finally {
       globalThis.fetch = original;
@@ -217,15 +216,16 @@ Deno.test(
       if (url.host === "api.telegram.org") {
         sends++;
         result = { ok: false, error_code: 403 };
-      } else if (url.pathname.endsWith("/notification_settings"))
+      } else if (url.pathname.endsWith("/notification_settings")) {
         result = url.searchParams.has("user_id") ? pref : [pref];
-      else if (url.pathname.endsWith("/schedule_settings"))
+      } else if (url.pathname.endsWith("/schedule_settings")) {
         result = { timezone: "UTC", first_shift: date, paused: false };
-      else if (url.pathname.endsWith("/telegram_connections")) {
-        if (method === "PATCH")
+      } else if (url.pathname.endsWith("/telegram_connections")) {
+        if (method === "PATCH") {
           blocked = JSON.parse(String(init?.body)).blocked === true;
+        }
         result = { chat_id: 42, blocked: false };
-      } else if (url.pathname.endsWith("/profiles"))
+      } else if (url.pathname.endsWith("/profiles")) {
         result = {
           state: {
             current: "1-18",
@@ -233,13 +233,14 @@ Deno.test(
             settings: { workWindowStart: "00:00", workWindowEnd: "00:00" },
           },
         };
-      else if (url.pathname.endsWith("/rpc/claim_notification")) result = true;
-      else if (url.pathname.endsWith("/notification_jobs")) {
+      } else if (url.pathname.endsWith("/rpc/claim_notification")) {
+        result = true;
+      } else if (url.pathname.endsWith("/notification_jobs")) {
         if (method === "POST") {
           const payload = JSON.parse(String(init?.body));
           deduped = String(payload.dedupe_key).includes(date);
         }
-        if (method === "GET")
+        if (method === "GET") {
           result = [
             {
               id: "job",
@@ -249,8 +250,10 @@ Deno.test(
               payload: { text: "test" },
             },
           ];
-        if (method === "PATCH" && url.searchParams.get("id") === "eq.job")
+        }
+        if (method === "PATCH" && url.searchParams.get("id") === "eq.job") {
           cancelled = JSON.parse(String(init?.body)).status === "cancelled";
+        }
       }
       return new Response(JSON.stringify(result), {
         headers: { "content-type": "application/json" },
@@ -264,8 +267,9 @@ Deno.test(
         }),
       );
       assert(response.status === 200);
-      if (sends !== 1 || !blocked || !cancelled || !deduped)
+      if (sends !== 1 || !blocked || !cancelled || !deduped) {
         throw Error(JSON.stringify({ sends, blocked, cancelled, deduped }));
+      }
     } finally {
       globalThis.fetch = original;
     }
@@ -303,3 +307,110 @@ Deno.test(
     }
   },
 );
+
+Deno.test("start link previews confirmation, callback uses bound sender and cancel never links", async () => {
+  const original = globalThis.fetch;
+  const bodies: any[] = [];
+  const calls: any[] = [];
+  const token = "a".repeat(64);
+  const { linkCallback } = await import("../_shared/link-flow.ts");
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    const body = JSON.parse(String(init?.body || "{}"));
+    calls.push({ url, body });
+    let result: any = {};
+    if (url.includes("/rpc/telegram_link_step")) {
+      assert(body.telegram_chat === 42);
+      result = {
+        code: body.step === "prepare"
+          ? "CONFIRM_REQUIRED"
+          : body.step === "cancel"
+          ? "CANCELLED"
+          : "LINKED",
+      };
+    } else if (url.includes("api.telegram.org")) {
+      bodies.push(body);
+      result = { ok: true, result: { message_id: 123 } };
+    }
+    return new Response(JSON.stringify(result), {
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await webhook(
+      request({
+        update_id: 501,
+        message: {
+          message_id: 2,
+          chat: { id: 42, type: "private" },
+          from: { id: 42 },
+          text: "/start " + token,
+        },
+      }),
+    );
+    const preview = bodies.find((b) =>
+      b.reply_markup?.inline_keyboard?.[0]?.[0]?.text ===
+        "✅ Подтвердить привязку"
+    );
+    assert(preview);
+    assert(!calls.some((c) => c.body.step === "confirm"));
+    assert(bodies.some((b) => b.reply_markup?.remove_keyboard === true));
+    const callback = preview.reply_markup.inline_keyboard[0][0].callback_data;
+    assert(new TextEncoder().encode(callback).length <= 64);
+    await webhook(
+      request({
+        update_id: 502,
+        callback_query: {
+          id: "c",
+          data: callback,
+          from: { id: 42 },
+          message: {
+            message_id: 5,
+            date: Math.floor(Date.now() / 1000),
+            chat: { id: 42, type: "private" },
+          },
+        },
+      }),
+    );
+    assert(calls.some((c) => c.body.step === "confirm"));
+    assert(
+      bodies.some((b) =>
+        b.text?.includes("Привязка успешно завершена") &&
+        b.reply_markup.inline_keyboard[0][0].web_app
+      ),
+    );
+    await webhook(request({
+      update_id: 503,
+      callback_query: {
+        id: "c2",
+        data: linkCallback(token, "cancel"),
+        from: { id: 42 },
+        message: {
+          message_id: 5,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 42, type: "private" },
+        },
+      },
+    }));
+    assert(calls.some((c) => c.body.step === "cancel"));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("onboarding launches through inline web_app and never reply keyboard", async () => {
+  const { welcomeKeyboard } = await import("../_shared/bot-ui.ts");
+  assert(
+    welcomeKeyboard.inline_keyboard[0][0].web_app.url ===
+      "https://andrey1904-dev.github.io/PWADevOps/",
+  );
+  assert(!("keyboard" in welcomeKeyboard));
+  const { linkCallback, callbackToken } = await import(
+    "../_shared/link-flow.ts"
+  );
+  const token = "0123456789abcdef".repeat(4);
+  const data = linkCallback(token, "confirm");
+  assert(callbackToken(data)?.token === token);
+  assert(callbackToken(data)?.action === "confirm");
+  assert(callbackToken("v3:confirm:invalid") === null);
+});

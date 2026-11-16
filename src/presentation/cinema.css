@@ -491,3 +491,33 @@ header {
     padding: 25px 22px !important;
   }
 }
+.telegram-link {
+  padding: 20px;
+  border: 1px solid #a87b9b55;
+  border-radius: 15px;
+  margin: 18px 0;
+}
+.telegram-link p {
+  line-height: 1.65;
+}
+.telegram-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  background: #f3ae9b;
+  color: #21192c;
+  text-decoration: none;
+  font-weight: 700;
+}
+.telegram-link a:not(.telegram-open) {
+  color: #ffcfb2;
+}
+.telegram-link-steps > button {
+  margin-top: 14px;
+}
+.telegram-link [role="alert"] {
+  color: #ffbdaf;
+}

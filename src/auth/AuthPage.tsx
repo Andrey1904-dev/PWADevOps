@@ -18,7 +18,7 @@ import {
   validateEmail,
   validateRegistration,
 } from "./validation";
-import { telegramApp } from "../telegram";
+import { telegramApp, missingTelegramIdentity } from "../telegram";
 import "./auth.css";
 import { Art } from "../presentation/Art";
 type Mode =
@@ -232,6 +232,19 @@ export function AuthPage({
                 Войди в свой аккаунт — и продолжи путь к настоящим навыкам
                 DevOps.
               </p>
+              {missingTelegramIdentity() && (
+                <p className="auth-hint">
+                  Telegram не передал данные входа при таком запуске. Откройте
+                  приложение из кнопки под сообщением бота или из его меню.{" "}
+                  <a
+                    href="https://t.me/PwaDevOps_Bot?start=app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Открыть правильную кнопку запуска
+                  </a>
+                </p>
+              )}
               {linkRequired && (
                 <p className="auth-hint">
                   Войди в существующий аккаунт, чтобы связать Telegram. Новый

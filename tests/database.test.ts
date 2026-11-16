@@ -98,14 +98,15 @@ describe("migration, ownership and transactional RPC", () => {
   });
   it("consumes token once and deduplicates bot actions", async () => {
     await db.exec(
-      `insert into telegram_link_tokens values('hash','${uid}',now()+interval '10 minutes')`,
+      `insert into telegram_link_tokens(token_hash,user_id,expires_at) values('hash','${uid}',now()+interval '10 minutes')`,
     );
+    await db.query("select telegram_link_step('hash',42,'prepare')");
     expect(
       (await db.query("select consume_link('hash',42,101) as ok")).rows[0],
     ).toEqual({ ok: true });
     expect(
       (await db.query("select consume_link('hash',42,102) as ok")).rows[0],
-    ).toEqual({ ok: false });
+    ).toEqual({ ok: true });
     await db.query("select bot_action(42,103,'begin','')");
     await db.query("select bot_action(42,104,'done','')");
     await db.query("select bot_action(42,104,'done','')");
@@ -203,4 +204,90 @@ it("registration trigger persists display name without granting anonymous access
   await expect(
     asUser(uid, `select display_name from profiles where id='${id}'`),
   ).resolves.toMatchObject({ rows: [] });
+});
+
+describe("explicit Telegram confirmation", () => {
+  const call = async (token: string, chat: number, step: string) =>
+    (
+      await db.query(
+        `select telegram_link_step('${token}',${chat},'${step}') as r`,
+      )
+    ).rows[0] as { r: { code: string } };
+  it("requires prepare, binds sender and never steals an existing account", async () => {
+    await db.exec(
+      `insert into telegram_link_tokens(token_hash,user_id,expires_at) values('pending-other','${other}',now()+interval '10 minutes')`,
+    );
+    expect((await call("pending-other", 9991, "confirm")).r.code).toBe(
+      "CONFIRM_REQUIRED",
+    );
+    expect((await call("pending-other", 9991, "prepare")).r.code).toBe(
+      "CONFIRM_REQUIRED",
+    );
+    expect((await call("pending-other", 9992, "confirm")).r.code).toBe(
+      "LINK_CLAIMED",
+    );
+    expect((await call("pending-other", 9991, "cancel")).r.code).toBe(
+      "CANCELLED",
+    );
+    expect((await call("pending-other", 9991, "confirm")).r.code).toBe(
+      "LINK_USED",
+    );
+    expect((await call("tampered", 9991, "prepare")).r.code).toBe(
+      "LINK_INVALID_OR_EXPIRED",
+    );
+  });
+  it("rejects expired capabilities and service-only RPC is denied to clients", async () => {
+    await db.exec(
+      `insert into telegram_link_tokens(token_hash,user_id,expires_at) values('expired-test','${other}',now()-interval '1 second')`,
+    );
+    expect((await call("expired-test", 9991, "prepare")).r.code).toBe(
+      "LINK_INVALID_OR_EXPIRED",
+    );
+    await expect(
+      asUser(other, "select telegram_link_step('expired-test',9991,'confirm')"),
+    ).rejects.toThrow();
+  });
+  it("supports reconnect but spent capability cannot restore revoked link", async () => {
+    await db.exec(
+      `delete from telegram_connections where user_id='${other}';insert into telegram_link_tokens(token_hash,user_id,expires_at) values('reconnect-test','${other}',now()+interval '10 minutes')`,
+    );
+    expect((await call("reconnect-test", 9993, "prepare")).r.code).toBe(
+      "CONFIRM_REQUIRED",
+    );
+    expect((await call("reconnect-test", 9993, "confirm")).r.code).toBe(
+      "LINKED",
+    );
+    const generation = (
+      await db.query(
+        "select connection_id from telegram_connections where chat_id=9993",
+      )
+    ).rows[0];
+    expect((await call("reconnect-test", 9993, "confirm")).r.code).toBe(
+      "ALREADY_LINKED",
+    );
+    expect(
+      (
+        await db.query(
+          "select connection_id from telegram_connections where chat_id=9993",
+        )
+      ).rows[0],
+    ).toEqual(generation);
+    await db.exec(
+      `insert into telegram_link_tokens(token_hash,user_id,expires_at) values('conflict-test','${uid}',now()+interval '10 minutes')`,
+    );
+    expect((await call("conflict-test", 9993, "prepare")).r.code).toBe(
+      "ACCOUNT_ALREADY_LINKED",
+    );
+    await asUser(other, "select revoke_telegram_link()");
+    expect((await call("reconnect-test", 9993, "confirm")).r.code).toBe(
+      "LINK_INVALID_OR_EXPIRED",
+    );
+    await db.exec(
+      `insert into telegram_link_tokens(token_hash,user_id,expires_at) values('new-reconnect','${other}',now()+interval '10 minutes')`,
+    );
+    await call("new-reconnect", 9993, "prepare");
+    expect((await call("new-reconnect", 9993, "confirm")).r.code).toBe(
+      "LINKED",
+    );
+  });
 });

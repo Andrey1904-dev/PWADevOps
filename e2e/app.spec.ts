@@ -289,3 +289,97 @@ test("cinematic artwork, world map and profile use actual empty progress", async
   });
   expect(errors).toEqual([]);
 });
+
+test("Telegram link opens bot without manual commands, survives reload, cancels and refreshes status", async ({
+  page,
+}, info) => {
+  const token = "a".repeat(64);
+  let created = 0,
+    cancelled = 0,
+    linked = false;
+  await page.route("**/functions/v1/link-telegram", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.action === "cancel") {
+      cancelled++;
+      await route.fulfill({ json: { cancelled: true } });
+      return;
+    }
+    created++;
+    await route.fulfill({
+      json: {
+        token,
+        url: `https://t.me/PwaDevOps_Bot?start=${token}`,
+        expires_at: new Date(Date.now() + 600000).toISOString(),
+      },
+    });
+  });
+  await page.route("**/rest/v1/telegram_connections?*", (route) =>
+    route.fulfill({ json: linked ? { chat_id: 42, blocked: false } : null }),
+  );
+  await page.goto("./");
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Привязать Telegram", exact: true })
+    .click();
+  const open = page.getByRole("link", { name: "Открыть Telegram-бота ↗" });
+  await expect(open).toHaveAttribute(
+    "href",
+    `https://t.me/PwaDevOps_Bot?start=${token}`,
+  );
+  await expect(
+    page.getByText("Получить одноразовый код", { exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await expect(open).toBeVisible();
+  expect(created).toBe(1);
+  await page
+    .getByRole("button", { name: "Отменить привязку", exact: true })
+    .click();
+  expect(cancelled).toBe(1);
+  await page
+    .getByRole("button", { name: "Привязать Telegram", exact: true })
+    .click();
+  expect(created).toBe(2);
+  await open.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `artifacts/telegram-link-005-${info.project.name}.png`,
+    animations: "disabled",
+  });
+  linked = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByRole("status").filter({ hasText: "Telegram подключён" }),
+  ).toBeVisible();
+  await expect(open).toHaveCount(0);
+});
+
+test("Telegram link API rate limits and network errors stay understandable", async ({
+  page,
+}) => {
+  let network = false;
+  await page.route("**/functions/v1/link-telegram", (route) =>
+    network
+      ? route.abort("internetdisconnected")
+      : route.fulfill({
+          status: 429,
+          json: { error: "LINK_RATE_LIMITED", retry_after_seconds: 60 },
+        }),
+  );
+  await page.goto("./");
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Привязать Telegram", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("одну минуту");
+  network = true;
+  await page
+    .getByRole("button", { name: "Привязать Telegram", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("Сетевая ошибка");
+});

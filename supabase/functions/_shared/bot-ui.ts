@@ -23,16 +23,8 @@ export const mainMenu = {
     [web("⚙️ Настройки", "settings"), web("🚀 Открыть приложение")],
   ],
 };
-export const welcomeKeyboard = {
-  keyboard: [
-    [web("🚀 Начать")],
-    [{ text: "🎯 Моя миссия" }, { text: "🏠 Главное меню" }],
-    [web("🗺️ Путь DevOps", "plan"), web("📅 Календарь", "calendar")],
-    [web("⏰ Напоминания", "reminders"), web("⚙️ Настройки", "settings")],
-  ],
-  resize_keyboard: true,
-  is_persistent: true,
-};
+// Reply-keyboard web_app launches do not carry WebAppInitData; auth requires inline/menu launch.
+export const welcomeKeyboard = { inline_keyboard: [[web("🚀 Начать")]] };
 export const notificationMenu = {
   inline_keyboard: [
     [

@@ -1,25 +1,32 @@
 import { chapters } from "../../../src/catalog.ts";
 import {
   db,
-  json,
-  hash,
   equal,
-  telegram,
+  hash,
+  json,
   runtimeSecret,
+  telegram,
 } from "../_shared/platform.ts";
 import {
   mainMenu,
-  welcomeKeyboard,
   navigation,
   web,
+  welcomeKeyboard,
 } from "../_shared/bot-ui.ts";
+import {
+  callbackToken,
+  linkCallback,
+  linkDiagnostic,
+  linkMessages,
+} from "../_shared/link-flow.ts";
 export const handler = async (req: Request): Promise<Response> => {
   const secret = await runtimeSecret("TELEGRAM_WEBHOOK_SECRET");
   if (
     !secret ||
     !equal(req.headers.get("X-Telegram-Bot-Api-Secret-Token") || "", secret)
-  )
+  ) {
     return json({}, 401);
+  }
   if (req.method !== "POST") return json({}, 405);
   try {
     const raw = await req.text();
@@ -30,7 +37,9 @@ export const handler = async (req: Request): Promise<Response> => {
     const chat = message?.chat;
     if (!chat || chat.type !== "private") return json({ ok: true });
     const sender = u.message?.from || u.callback_query?.from;
-    if (sender?.id !== chat.id) return json({}, 403);
+    if (
+      !Number.isSafeInteger(chat.id) || chat.id <= 0 || sender?.id !== chat.id
+    ) return json({}, 403);
     const callback = u.callback_query;
     let text = String(callback?.data || u.message?.text || "menu").slice(
       0,
@@ -42,8 +51,7 @@ export const handler = async (req: Request): Promise<Response> => {
     let stale = false;
     if (callback) {
       await telegram("answerCallbackQuery", { callback_query_id: callback.id });
-      stale =
-        !text.startsWith("v2:") ||
+      stale = (!text.startsWith("v2:") && !text.startsWith("v3:")) ||
         Date.now() / 1000 - (message.date || Date.now() / 1000) > 7 * 86400;
       const parts = text.split(":");
       action = stale ? "menu" : parts[1];
@@ -55,31 +63,70 @@ export const handler = async (req: Request): Promise<Response> => {
       };
       text = aliases[text] || text;
       const [command, ...args] = text.replace(/^\//, "").split(" ");
-      action =
-        (
-          {
-            missions: "mission",
-            help: "menu",
-            today: "mission",
-            progress: "stats",
-            week: "stats",
-          } as Record<string, string>
-        )[command] || command.split("@")[0];
+      action = (
+        {
+          missions: "mission",
+          help: "menu",
+          today: "mission",
+          progress: "stats",
+          week: "stats",
+        } as Record<string, string>
+      )[command] || command.split("@")[0];
       argument = args.join(" ");
+      if (action === "start" && argument === "app") argument = "";
     }
     const client = db();
     let reply = "";
     let markup: unknown = mainMenu;
-    if (action === "start" && argument) {
-      const { data, error } = await client.rpc("consume_link", {
-        hash: await hash(argument),
-        telegram_chat: chat.id,
-        update_number: u.update_id,
-      });
-      if (error) return json({}, 503);
-      reply = data
-        ? "✅ Аккаунт связан. Открой приложение: прогресс уже общий. Уведомления включаются отдельно."
-        : "Ссылка уже использована или устарела. Открой приложение и свяжи аккаунт там.";
+    const confirmation = callback ? callbackToken(text) : null;
+    if (
+      (action === "start" && argument) || confirmation ||
+      (callback && text.startsWith("v3:"))
+    ) {
+      const rawToken = confirmation?.token || argument;
+      const step = confirmation?.action || "prepare";
+      if (
+        !/^[a-f0-9]{64}$/.test(rawToken) ||
+        (callback && (!confirmation || stale))
+      ) {
+        reply = linkMessages.LINK_INVALID_OR_EXPIRED;
+        linkDiagnostic(
+          step,
+          "LINK_INVALID_OR_EXPIRED",
+          "malformed or stale link capability",
+        );
+      } else {
+        const { data, error } = await client.rpc("telegram_link_step", {
+          hash: await hash(rawToken),
+          telegram_chat: chat.id,
+          step,
+        });
+        if (error) {
+          linkDiagnostic(
+            step,
+            "DATABASE_UNAVAILABLE",
+            error.code || "RPC transport failure",
+          );
+          return json({ error: "DATABASE_UNAVAILABLE" }, 503);
+        }
+        const code = data?.code || "UNKNOWN_RESULT";
+        linkDiagnostic(step, code, "service-only transactional link handshake");
+        reply = linkMessages[code] ||
+          "Не удалось подтвердить Telegram. Повтори позже.";
+        if (code === "CONFIRM_REQUIRED") {
+          markup = {
+            inline_keyboard: [[{
+              text: "✅ Подтвердить привязку",
+              callback_data: linkCallback(rawToken, "confirm"),
+            }], [{
+              text: "Отменить",
+              callback_data: linkCallback(rawToken, "cancel"),
+            }]],
+          };
+        } else {markup = {
+            inline_keyboard: [[web("🚀 Открыть DevOps Quest")], ...navigation],
+          };}
+      }
     } else {
       const writes: Record<string, [string, string]> = {
         confirm_solved: ["status", "solved"],
@@ -94,18 +141,18 @@ export const handler = async (req: Request): Promise<Response> => {
       const mutation = writes[action];
       const { data: s, error } = mutation
         ? await client.rpc("bot_action_guarded", {
-            chat: chat.id,
-            update_number: u.update_id,
-            action: mutation[0],
-            argument: mutation[1],
-            target_mission: target || null,
-          })
+          chat: chat.id,
+          update_number: u.update_id,
+          action: mutation[0],
+          argument: mutation[1],
+          target_mission: target || null,
+        })
         : await client.rpc("bot_action", {
-            chat: chat.id,
-            update_number: u.update_id,
-            action: "menu",
-            argument: "",
-          });
+          chat: chat.id,
+          update_number: u.update_id,
+          action: "menu",
+          argument: "",
+        });
       if (error) return json({ error: "DATABASE_UNAVAILABLE" }, 503);
       if (s.duplicate) return json({ ok: true });
       if (s.unlinked) {
@@ -121,16 +168,18 @@ export const handler = async (req: Request): Promise<Response> => {
           .find((m) => m.id === s.current);
         const mission = { ...missionBase, ...s.overrides?.[s.current] };
         const chapter = chapters.find((c) =>
-          c.missions.some((m) => m.id === s.current),
+          c.missions.some((m) => m.id === s.current)
         );
-        const boss =
-          s.overrides?.["chapter-" + chapter?.id]?.boss || chapter?.boss;
+        const boss = s.overrides?.["chapter-" + chapter?.id]?.boss ||
+          chapter?.boss;
         const complete = Object.values(s.progress || {}).filter(
           (p: any) => p.status === "verified",
         ).length;
         switch (action) {
           case "mission":
-            reply = `🎯 ${chapter?.title || "Текущая глава"}\nМиссия №${mission.number || 18}: ${mission.title || ""}\n\n${mission.task || ""}`;
+            reply = `🎯 ${chapter?.title || "Текущая глава"}\nМиссия №${
+              mission.number || 18
+            }: ${mission.title || ""}\n\n${mission.task || ""}`;
             markup = {
               inline_keyboard: [
                 [
@@ -169,7 +218,9 @@ export const handler = async (req: Request): Promise<Response> => {
               "✅ Решение отмечено. XP начисляется один раз. Проверку знаний добавь в приложении.";
             break;
           case "boss":
-            reply = `🏆 Финальное испытание\n\n${boss || "Открой карту развития в приложении."}`;
+            reply = `🏆 Финальное испытание\n\n${
+              boss || "Открой карту развития в приложении."
+            }`;
             markup = {
               inline_keyboard: [
                 [web("Открыть путь DevOps", "plan")],
@@ -218,7 +269,8 @@ export const handler = async (req: Request): Promise<Response> => {
               "🌿 Сегодня отдыхаем. Никаких долгов. Завтра можно продолжить.";
             break;
           case "stats":
-            reply = `📊 Проверено ${complete}/360 миссий. Подробная статистика — в приложении.`;
+            reply =
+              `📊 Проверено ${complete}/360 миссий. Подробная статистика — в приложении.`;
             markup = {
               inline_keyboard: [
                 [web("Открыть статистику", "stats")],
@@ -234,6 +286,17 @@ export const handler = async (req: Request): Promise<Response> => {
         }
       }
     }
+    // Remove the legacy reply keyboard, otherwise existing Telegram clients keep the
+    // old launch button which opens without initData. Delete the transient cleanup notice.
+    let legacyNotice: number | undefined;
+    if (u.message && action === "start") {
+      const cleanup = await telegram("sendMessage", {
+        chat_id: chat.id,
+        text: "Обновляем меню DevOps Quest…",
+        reply_markup: { remove_keyboard: true },
+      });
+      legacyNotice = cleanup.result?.message_id;
+    }
     let result;
     if (callback) {
       result = await telegram("editMessageText", {
@@ -246,27 +309,59 @@ export const handler = async (req: Request): Promise<Response> => {
         !result.ok &&
         result.error_code === 400 &&
         String(result.description).includes("message is not modified")
-      )
+      ) {
         return json({ ok: true });
-      if (!result.ok && result.error_code === 400)
+      }
+      if (!result.ok && result.error_code === 400) {
         result = await telegram("sendMessage", {
           chat_id: chat.id,
           text: reply,
           reply_markup: markup,
         });
-    } else
+      }
+    } else {
       result = await telegram("sendMessage", {
         chat_id: chat.id,
         text: reply,
         reply_markup: markup,
       });
-    if (!result.ok && result.error_code === 403)
+    }
+    if (legacyNotice) {
+      try {
+        await telegram("deleteMessage", {
+          chat_id: chat.id,
+          message_id: legacyNotice,
+        });
+      } catch { /* Cleanup must not retry a completed link. */ }
+    }
+    if (!result.ok) {
+      linkDiagnostic(
+        "reply",
+        "TELEGRAM_REJECTED",
+        `Telegram API error ${Number(result.error_code) || 0}`,
+      );
+    }
+    if (!result.ok && result.error_code === 403) {
       await client
         .from("telegram_connections")
         .update({ blocked: true })
         .eq("chat_id", chat.id);
+    }
+    if (!result.ok && (result.error_code === 429 || result.error_code >= 500)) {
+      linkDiagnostic(
+        "reply",
+        "TELEGRAM_RETRY",
+        "Telegram delivery temporarily unavailable",
+      );
+      return json({ error: "TELEGRAM_UNAVAILABLE" }, 503);
+    }
     return json({ ok: true });
   } catch {
+    linkDiagnostic(
+      "webhook",
+      "TEMPORARY_FAILURE",
+      "unexpected handler or transport failure",
+    );
     return json({ error: "TEMPORARY_FAILURE" }, 503);
   }
 };

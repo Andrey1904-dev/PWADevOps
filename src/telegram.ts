@@ -1,6 +1,7 @@
 import { supabase } from "./store";
 type TelegramApp = {
   initData: string;
+  platform?: string;
   colorScheme: "light" | "dark";
   themeParams: Record<string, string>;
   ready: () => void;
@@ -79,3 +80,9 @@ export async function checkMiniSession() {
   }
   return true;
 }
+
+// UI guidance only; this flag never establishes Telegram identity.
+export const missingTelegramIdentity = () => {
+  const app = window.Telegram?.WebApp;
+  return !!app?.platform && app.platform !== "unknown" && !app.initData;
+};

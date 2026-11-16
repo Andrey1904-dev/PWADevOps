@@ -284,3 +284,52 @@ test("recovery callback shows password form without mounting cabinet", async ({
   await expect(page.getByRole("status")).toContainText("Пароль изменён");
   await expect(page.locator("nav")).toHaveCount(0);
 });
+
+test("legacy Telegram keyboard launch with empty initData gives a safe relaunch path", async ({
+  page,
+}) => {
+  await page.route("**/telegram.org/js/telegram-web-app.js", (r) =>
+    r.fulfill({ body: "", contentType: "application/javascript" }),
+  );
+  await page.addInitScript(() => {
+    window.Telegram = {
+      WebApp: {
+        initData: "",
+        platform: "ios",
+        colorScheme: "dark",
+        themeParams: {},
+        ready: () => {},
+        expand: () => {},
+        setHeaderColor: () => {},
+        setBackgroundColor: () => {},
+        onEvent: () => {},
+        offEvent: () => {},
+        BackButton: {
+          show: () => {},
+          hide: () => {},
+          onClick: () => {},
+          offClick: () => {},
+        },
+      },
+    };
+  });
+  let exchanges = 0;
+  await page.route("**/functions/v1/telegram-auth", (r) => {
+    exchanges++;
+    return r.fulfill({
+      status: 401,
+      json: { error: "INVALID_OR_EXPIRED_INIT_DATA" },
+    });
+  });
+  await page.goto("./");
+  await expect(
+    page.getByText("Telegram не передал данные входа при таком запуске.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Открыть правильную кнопку запуска" }),
+  ).toHaveAttribute("href", "https://t.me/PwaDevOps_Bot?start=app");
+  await expect(page.locator("nav")).toHaveCount(0);
+  expect(exchanges).toBe(0);
+});
