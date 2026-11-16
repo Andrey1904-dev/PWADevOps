@@ -20,6 +20,7 @@ import {
 } from "./validation";
 import { telegramApp } from "../telegram";
 import "./auth.css";
+import { Art } from "../presentation/Art";
 type Mode =
   "welcome" | "login" | "register" | "confirm" | "forgot" | "sent" | "update";
 export function AuthPage({
@@ -165,7 +166,9 @@ export function AuthPage({
   }
   return (
     <div className="auth-scene">
-      <div className="auth-art" aria-hidden="true" />
+      <div className="auth-art" aria-hidden="true">
+        <Art name="auth" priority />
+      </div>
       <div className="auth-scan" aria-hidden="true" />
       <header className="auth-header">
         <a

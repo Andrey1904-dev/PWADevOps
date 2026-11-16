@@ -48,6 +48,10 @@ import {
 import { gameStats } from "./game";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import "./style.css";
+import { Art, chapterArt, bossArt } from "./presentation/Art";
+import { Profile } from "./presentation/Profile";
+import { Victory } from "./presentation/Victory";
+import "./presentation/cinema.css";
 import { validateImport } from "./validation";
 const tabs = [
   "Главная",
@@ -90,6 +94,9 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
   const [now, setNow] = useState(Date.now());
   const [selected, setSelected] = useState(1);
   const [calendarOffset, setCalendarOffset] = useState(0);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [tab]);
   const user = account.email || "";
   const userId = account.id;
   const displayName =
@@ -138,6 +145,23 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
       document.removeEventListener("visibilitychange", check);
     };
   }, [user, userId]);
+  const [victory, setVictory] = useState<number | null>(null);
+  const seenBossRewards = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (loadingAccount) return;
+    const rewards = new Set(
+      (s.rewardEvents || [])
+        .filter((e) => e.event_key.endsWith(":boss"))
+        .map((e) => e.event_key),
+    );
+    if (seenBossRewards.current) {
+      const added = [...rewards].find(
+        (key) => !seenBossRewards.current!.has(key),
+      );
+      if (added) setVictory(Number(added.split("-")[0]));
+    }
+    seenBossRewards.current = rewards;
+  }, [s.rewardEvents, loadingAccount]);
   const currentUser = useRef(userId);
   currentUser.current = userId;
   const chapters = baseChapters.map((c) => ({
@@ -479,6 +503,9 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                 {miniStatus}
               </p>
             )}
+          {victory && (
+            <Victory chapter={victory} onClose={() => setVictory(null)} />
+          )}
           {message && (
             <div
               role="status"
@@ -491,12 +518,16 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
           {tab === 0 && (
             <>
               <section className="hero">
+                <Art name="hero" priority />
                 <div className="hero-main">
                   <div className="pill">
                     <span /> ГЛАВА {String(chapter.id).padStart(2, "0")} / 18{" "}
                     <span className="muted">· ВАШ ТЕКУЩИЙ ЭТАП</span>
                   </div>
                   <h2>{chapter.title}</h2>
+                  <p className="hero-mission">
+                    МИССИЯ №{mission.number} · {mission.title}
+                  </p>
                   <p>
                     Прочный фундамент для большой инфраструктуры.
                     <br />
@@ -510,7 +541,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                         ?.scrollIntoView({ behavior: "smooth" })
                     }
                   >
-                    Продолжить обучение <ArrowUpRight size={17} />
+                    Продолжить миссию <ArrowUpRight size={17} />
                   </button>
                   <div className="chapter-progress">
                     <div>
@@ -532,32 +563,6 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                       />
                     </div>
                   </div>
-                </div>
-                <div className="terminal-art">
-                  <div className="terminal-title">
-                    <span>● ● ●</span> quest.py
-                  </div>
-                  <code>
-                    <span className="purple">class</span>{" "}
-                    <span className="cyan">DevOpsEngineer</span>:<br />
-                    <br /> def <span className="green">__init__</span>(self):
-                    <br /> self.curiosity = <span className="orange">True</span>
-                    <br /> self.progress ={" "}
-                    <span className="orange">"every day"</span>
-                    <br />
-                    <br />{" "}
-                    <span className="muted">
-                      # build. break. learn. repeat.
-                    </span>
-                    <br /> self.<span className="cyan">next_level</span>()
-                    <br />
-                    <br />
-                    <span className="green">❯</span>{" "}
-                    <span className="cursor">_</span>
-                  </code>
-                  <span className="terminal-footer">
-                    ● СИСТЕМА ГОТОВА <span>ОБУЧЕНИЕ ПРОДОЛЖАЕТСЯ</span>
-                  </span>
                 </div>
               </section>
               <section className="player-card">
@@ -614,7 +619,10 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                 <section className="panel" id="mission">
                   <div className="section-title">
                     <h3>Текущая миссия</h3>
-                    <span className="tag">PYTHON / {mission.number}</span>
+                    <span className="tag">
+                      {chapter.title.split(":")[0].toUpperCase()} /{" "}
+                      {mission.number}
+                    </span>
                   </div>
                   <h2 className="mission-title">{mission.title}</h2>
                   <p className="muted">{mission.task}</p>
@@ -883,6 +891,14 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                       className={selected === c.id ? "selected" : ""}
                       onClick={() => setSelected(c.id)}
                     >
+                      <Art name={chapterArt[c.id - 1]} />
+                      <span className="location-status">
+                        {done === 20
+                          ? "ГЛАВА ПРОЙДЕНА"
+                          : c.id === chapter.id
+                            ? "ТЕКУЩАЯ ЛОКАЦИЯ"
+                            : "ОТКРЫТА ДЛЯ ИЗУЧЕНИЯ"}
+                      </span>
                       <span className="map-node">
                         {done === 20 ? "✓" : String(c.id).padStart(2, "0")}
                       </span>
@@ -890,6 +906,9 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                       <small>
                         {done}/20 проверено · {c.month}
                       </small>
+                      <span className="bar">
+                        <i style={{ width: `${done * 5}%` }} />
+                      </span>
                     </button>
                   );
                 })}
@@ -914,7 +933,34 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                   ))}
                 </section>
                 <section className="panel">
+                  <div className="chapter-cover">
+                    <Art name={chapterArt[selected - 1]} />
+                  </div>
                   <h2>{chapters[selected - 1].title}</h2>
+                  {[3, 4, 11].includes(selected) && (
+                    <div className="skill-slices">
+                      {(selected === 3
+                        ? [
+                            ["Linux", "world-a-3"],
+                            ["Bash", "extras-5"],
+                          ]
+                        : selected === 4
+                          ? [
+                              ["Networking", "world-a-4"],
+                              ["Git", "extras-7"],
+                            ]
+                          : [
+                              ["Terraform", "world-b-5"],
+                              ["Cloud", "extras-8"],
+                            ]
+                      ).map(([title, art]) => (
+                        <figure key={title}>
+                          <Art name={art} />
+                          <figcaption>{title}</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  )}
                   <details>
                     <summary>Изменить главу и даты</summary>
                     {(
@@ -972,7 +1018,66 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
                     решение, продемонстрируйте работу и восстановление после
                     ошибки.
                   </p>
-                  <p className="cyan">Босс: {chapters[selected - 1].boss}</p>
+                  <section className="boss-cover">
+                    <Art name={bossArt[selected - 1]} />
+                    <small>ФИНАЛЬНОЕ ИСПЫТАНИЕ · ГЛАВА {selected}</small>
+                    <h3>Босс: {chapters[selected - 1].title}</h3>
+                    <p>{chapters[selected - 1].boss}</p>
+                    <p>
+                      Сложность:{" "}
+                      {selected < 7
+                        ? "Базовая"
+                        : selected < 13
+                          ? "Продвинутая"
+                          : "Комплексная"}
+                      . Проверяются навыки всех предыдущих глав.
+                    </p>
+                    <small>
+                      Награда: до 300 XP суммарно за решение и подтверждение.
+                      Повторно не начисляется.
+                    </small>
+                    <p>
+                      Статус:{" "}
+                      {
+                        statusLabels[
+                          s.progress[`${selected}-20`]?.status || "not_started"
+                        ]
+                      }
+                    </p>
+                    <button
+                      onClick={() => {
+                        change((v) => ({ ...v, current: `${selected}-20` }));
+                        setTab(0);
+                      }}
+                    >
+                      Открыть испытание
+                    </button>
+                  </section>
+                  <details className="boss-history">
+                    <summary>История испытания</summary>
+                    {(s.missionHistory || []).filter(
+                      (h) => h.mission_id === `${selected}-20`,
+                    ).length ? (
+                      (s.missionHistory || [])
+                        .filter((h) => h.mission_id === `${selected}-20`)
+                        .map((h) => (
+                          <p key={h.id}>
+                            {new Date(h.changed_at).toLocaleString("ru")} ·{" "}
+                            {statusLabels[h.new_status]}
+                          </p>
+                        ))
+                    ) : (
+                      <p className="muted">
+                        Сохранённых изменений статуса пока нет. История появится
+                        после синхронизации испытания.
+                      </p>
+                    )}
+                    <p className="muted">
+                      Результат проверки:{" "}
+                      {s.progress[`${selected}-20`]?.review ||
+                        "Пока не записан"}
+                    </p>
+                  </details>
                   {chapters[selected - 1].missions.map((m) => (
                     <button
                       className="mission-row"
@@ -1176,6 +1281,7 @@ function App({ account, onLogout }: { account: User; onLogout: () => void }) {
           )}
           {tab === 3 && (
             <>
+              <Profile state={s} today={today} name={displayName} />
               <div className="metrics">
                 {card("Решено", solved, "Миссий", Check)}
                 {card(

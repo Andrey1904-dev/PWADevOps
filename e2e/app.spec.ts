@@ -54,7 +54,7 @@ test("curriculum edits persist and mobile layout fits", async ({ page }) => {
     .getByRole("button", { name: "План обучения", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Python: мой маршрут" }),
+    page.getByRole("heading", { name: "Python: мой маршрут", exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -233,4 +233,59 @@ test("personal cycle and energy buttons keep current mission and allow explicit 
   await expect(
     page.getByLabel("Тип дня 2026-11-17", { exact: true }),
   ).toHaveValue("rest");
+});
+
+test("cinematic artwork, world map and profile use actual empty progress", async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("./");
+  const hero = page.locator(".hero img");
+  await expect(hero).toBeVisible();
+  await expect
+    .poll(() =>
+      hero.evaluate(
+        (el: HTMLImageElement) => el.complete && el.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
+  await expect(page.getByText("0 подтверждено проверкой")).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/redesign-home-${info.project.name}.png`,
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", { name: "План обучения", exact: true })
+    .click();
+  await expect(page.locator(".skill-map button")).toHaveCount(18);
+  await page.locator(".skill-map button").nth(14).click();
+  await expect(page.locator(".boss-cover")).toContainText("DevSecOps");
+  const boss = page.locator(".boss-cover img");
+  await boss.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      boss.evaluate(
+        (el: HTMLImageElement) => el.complete && el.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
+  await page.screenshot({
+    path: `artifacts/redesign-world-${info.project.name}.png`,
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "Статистика", exact: true }).click();
+  await expect(page.locator(".achievement-grid .earned")).toHaveCount(0);
+  await expect(page.locator(".profile-cinema")).toContainText("0 XP");
+  await expect(page.locator(".achievement-grid .locked")).toHaveCount(3);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `artifacts/redesign-profile-${info.project.name}.png`,
+    animations: "disabled",
+  });
+  expect(errors).toEqual([]);
 });

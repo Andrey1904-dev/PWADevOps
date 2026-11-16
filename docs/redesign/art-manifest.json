@@ -1,0 +1,585 @@
+{
+  "provenance": "Original imagegen artwork. Pillow only crops and compresses. Atlas tiles retain their native resolution; no upscaling. UI labels are HTML.",
+  "assets": [
+    {
+      "file": "public/art/auth-480.webp",
+      "source": "auth",
+      "size": [
+        480,
+        270
+      ],
+      "bytes": 25702,
+      "sha256": "3fb3307f562307cb817a50b415853f549aa904ed85598d9c6f99cef4b299facd"
+    },
+    {
+      "file": "public/art/auth-960.webp",
+      "source": "auth",
+      "size": [
+        960,
+        540
+      ],
+      "bytes": 91142,
+      "sha256": "268974d22e116c760a4541096282405f1888269af92586864937c297764bf6b4"
+    },
+    {
+      "file": "public/art/auth-1600.webp",
+      "source": "auth",
+      "size": [
+        1600,
+        900
+      ],
+      "bytes": 211602,
+      "sha256": "7451127551b610bab8cf2a189d98c0ec67590ff978fd5205b9aecbbb08885dc1"
+    },
+    {
+      "file": "public/art/hero-480.webp",
+      "source": "hero",
+      "size": [
+        480,
+        270
+      ],
+      "bytes": 26896,
+      "sha256": "6b19db53ab344adb2ec67603ed9733a1a564650d044591dbf620680cfb472e68"
+    },
+    {
+      "file": "public/art/hero-960.webp",
+      "source": "hero",
+      "size": [
+        960,
+        540
+      ],
+      "bytes": 89698,
+      "sha256": "9886c2d0579b6fc3ee8347643f5efcf972a7796c4d35822eff13dc9ce8e354ba"
+    },
+    {
+      "file": "public/art/hero-1600.webp",
+      "source": "hero",
+      "size": [
+        1600,
+        900
+      ],
+      "bytes": 197296,
+      "sha256": "a62f6f4b4d3bee401b0594d85428722315f5a3076be714691ff550caeadbba90"
+    },
+    {
+      "file": "public/art/world-a-1-480.webp",
+      "source": "world-a",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 29944,
+      "sha256": "49d09c61358f32be6854709ca1acbac8f0ca169fcb4a50e26b5a99b6ce577628"
+    },
+    {
+      "file": "public/art/world-a-2-480.webp",
+      "source": "world-a",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 32450,
+      "sha256": "ccbbf6cc269824e19cee0ec16b6f8203caae84c4908eb396d63617431bf1ba64"
+    },
+    {
+      "file": "public/art/world-a-3-480.webp",
+      "source": "world-a",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 30566,
+      "sha256": "d32f379479134d2c9ab6d0e24f64af800bd1eb223373bfc703ab9c14cfba09fe"
+    },
+    {
+      "file": "public/art/world-a-4-480.webp",
+      "source": "world-a",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 33460,
+      "sha256": "55fffdf50def8f2c97f519cef17861cbd2ebae0278c6ab6b2ee5e62b9620a270"
+    },
+    {
+      "file": "public/art/world-a-5-480.webp",
+      "source": "world-a",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 34712,
+      "sha256": "78d671fa1b94c65c92f83bdabddc5e813e15650370761b0b5206f3110adaadbf"
+    },
+    {
+      "file": "public/art/world-a-6-480.webp",
+      "source": "world-a",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 34088,
+      "sha256": "4a3f9082d540cd2358d527ec32f2540a2c6ca5d407515f3e28c53b87792387a1"
+    },
+    {
+      "file": "public/art/world-b-1-480.webp",
+      "source": "world-b",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 36070,
+      "sha256": "f3cf511bb90d653780ceca69bdd1709f823439dc66cc4c2ed13630c40f01b27b"
+    },
+    {
+      "file": "public/art/world-b-2-480.webp",
+      "source": "world-b",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 34608,
+      "sha256": "e5d23ef78fb8f24b23f71a0a2a89d00535e92c1274985d4c5cbe98868fffa56b"
+    },
+    {
+      "file": "public/art/world-b-3-480.webp",
+      "source": "world-b",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 33676,
+      "sha256": "5dea73e2d9d534cfd57addc5efee99d61de94d683747e761282d7fc1e73d5813"
+    },
+    {
+      "file": "public/art/world-b-4-480.webp",
+      "source": "world-b",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 33684,
+      "sha256": "34e4c0863b6212d9b93e801f41979f7cb6fee692115743ed9fa27714f60354bf"
+    },
+    {
+      "file": "public/art/world-b-5-480.webp",
+      "source": "world-b",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 34162,
+      "sha256": "d9f3da2ca234d5099ff026552281e76ffe596c52e426c5246bed73144bdf805d"
+    },
+    {
+      "file": "public/art/world-b-6-480.webp",
+      "source": "world-b",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 37122,
+      "sha256": "a56e5153391d5e2a26b9ef639f515213002e5a69d0af6f464909e23b3e393d8f"
+    },
+    {
+      "file": "public/art/world-c-1-480.webp",
+      "source": "world-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 30252,
+      "sha256": "c615ed3c1d4e358ceb8e9e6353a383ae104bc72f6be1be7d8e3e5df21ea48dee"
+    },
+    {
+      "file": "public/art/world-c-2-480.webp",
+      "source": "world-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 28056,
+      "sha256": "625e680ecb8ae43b1e2c02aa63947e3a31f0a9d1d60abf784452802acff68829"
+    },
+    {
+      "file": "public/art/world-c-3-480.webp",
+      "source": "world-c",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 33124,
+      "sha256": "f4eb0e32b64dba22d88230c7c51ae8c1ca305e201339e455ae4cf05fd96927f0"
+    },
+    {
+      "file": "public/art/world-c-4-480.webp",
+      "source": "world-c",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 37350,
+      "sha256": "e995b2ac7f4b5ba76f6632c80b1b42ab731f767a46f442f85cc2e0d5fa138951"
+    },
+    {
+      "file": "public/art/world-c-5-480.webp",
+      "source": "world-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 28312,
+      "sha256": "df4f473034ee4c039c013c979855a44a10cc54e9900c2bc7dd17a7e5d1994cd1"
+    },
+    {
+      "file": "public/art/world-c-6-480.webp",
+      "source": "world-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 25144,
+      "sha256": "3285c31657349a3c68df6f58ad9795916191f3b3676503081438f23f95b32949"
+    },
+    {
+      "file": "public/art/boss-1-480.webp",
+      "source": "boss",
+      "size": [
+        480,
+        480
+      ],
+      "bytes": 69676,
+      "sha256": "2756e2cdc5616f8bb5b145e561e577055ee05797570fc45e0ea2916acc62e9e2"
+    },
+    {
+      "file": "public/art/boss-2-480.webp",
+      "source": "boss",
+      "size": [
+        480,
+        480
+      ],
+      "bytes": 59934,
+      "sha256": "07aecfaca87847cd072270d064d39d179b130f82960b78713a834160b7776658"
+    },
+    {
+      "file": "public/art/boss-3-480.webp",
+      "source": "boss",
+      "size": [
+        480,
+        480
+      ],
+      "bytes": 56600,
+      "sha256": "24e64827540dd74463854f65c3d0165b50a8a70bedfb70cd8bbfa4e2e61bda33"
+    },
+    {
+      "file": "public/art/boss-4-480.webp",
+      "source": "boss",
+      "size": [
+        480,
+        480
+      ],
+      "bytes": 58370,
+      "sha256": "5b5bf9d8d999a0a2b5f79145a17333164450696c265a7badf0708d4545b8cda8"
+    },
+    {
+      "file": "public/art/boss-5-480.webp",
+      "source": "boss",
+      "size": [
+        480,
+        480
+      ],
+      "bytes": 59374,
+      "sha256": "ca36d127857d2ad28a78ea4f4b148272698ecb88f71c78ac6f599f36ece82031"
+    },
+    {
+      "file": "public/art/boss-6-480.webp",
+      "source": "boss",
+      "size": [
+        480,
+        480
+      ],
+      "bytes": 63004,
+      "sha256": "91120c8ae7e1f74a7032e63c973ad8e72e05ea59c00226c89f58bd4834d89b1f"
+    },
+    {
+      "file": "public/art/boss-b-1-480.webp",
+      "source": "boss-b",
+      "size": [
+        480,
+        324
+      ],
+      "bytes": 47494,
+      "sha256": "c2a7daa1721bcdda4041dc48c41d778ff091bcac206388c1afaa49e290a325c9"
+    },
+    {
+      "file": "public/art/boss-b-2-480.webp",
+      "source": "boss-b",
+      "size": [
+        480,
+        324
+      ],
+      "bytes": 44540,
+      "sha256": "541206656c0a92bfb23a5782fe1bfb822488ccbf559adb43552f1c0bc6e12a1d"
+    },
+    {
+      "file": "public/art/boss-b-3-480.webp",
+      "source": "boss-b",
+      "size": [
+        480,
+        324
+      ],
+      "bytes": 46986,
+      "sha256": "cc640dad1602abcbef5ec8d2edaaa03909ddb8dbe775c6459cb66d1c701c7033"
+    },
+    {
+      "file": "public/art/boss-b-4-480.webp",
+      "source": "boss-b",
+      "size": [
+        480,
+        324
+      ],
+      "bytes": 52584,
+      "sha256": "5be42ec7fc8265a2d6f670d4feefbcb42c25c8be8da804bf8706e92f1f41d10e"
+    },
+    {
+      "file": "public/art/boss-b-5-480.webp",
+      "source": "boss-b",
+      "size": [
+        480,
+        324
+      ],
+      "bytes": 54532,
+      "sha256": "d0b9076c2621fe57d85c3172ffc0db034d573ef7cef6bca525a484e16469b133"
+    },
+    {
+      "file": "public/art/boss-b-6-480.webp",
+      "source": "boss-b",
+      "size": [
+        480,
+        324
+      ],
+      "bytes": 39760,
+      "sha256": "60bf7cd1c75d8357b4f0249ac158b04aa5220cf8e061f3dd6cee639662b69031"
+    },
+    {
+      "file": "public/art/boss-c-1-480.webp",
+      "source": "boss-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 25074,
+      "sha256": "4a2dfa6163ba7e525848987b31ccb82e7456fde1930db1174c0fd2eed420c374"
+    },
+    {
+      "file": "public/art/boss-c-2-480.webp",
+      "source": "boss-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 34502,
+      "sha256": "0e189b56753a798d3632a2307e5597e63d920bd718429a004f484659e694b39b"
+    },
+    {
+      "file": "public/art/boss-c-3-480.webp",
+      "source": "boss-c",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 29064,
+      "sha256": "565ec29864d8635d4fd4130f2c1a123b8e1cf1cd1bf730282b4c132a64b2bc0b"
+    },
+    {
+      "file": "public/art/boss-c-4-480.webp",
+      "source": "boss-c",
+      "size": [
+        480,
+        214
+      ],
+      "bytes": 29486,
+      "sha256": "31cf11afe97427fec1aaf2c09f9fca27a522949e5bd8e2121b7c6d1d54926c86"
+    },
+    {
+      "file": "public/art/boss-c-5-480.webp",
+      "source": "boss-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 24938,
+      "sha256": "b32b31a964e16162fb624a453670ae0eab35b8432b7fb497542278718e829b74"
+    },
+    {
+      "file": "public/art/boss-c-6-480.webp",
+      "source": "boss-c",
+      "size": [
+        480,
+        213
+      ],
+      "bytes": 33318,
+      "sha256": "82c89fa9466cca9971960310891726657740e9e265edacc3ffa11664d4107593"
+    },
+    {
+      "file": "public/art/extras-1-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 30154,
+      "sha256": "4d7989306e2f9614647f194189e06db47407dd962a3b8e339313b9114707cdc7"
+    },
+    {
+      "file": "public/art/extras-2-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 28826,
+      "sha256": "5dc442bc86d725cd7408eb6c8ebb2820c9f2e33e4c824878ae43742a6f4be3a4"
+    },
+    {
+      "file": "public/art/extras-3-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 31056,
+      "sha256": "fbe1de630b23ee01497ada2fe526e00d55ccf2b2738839d22f8003fc47f7d164"
+    },
+    {
+      "file": "public/art/extras-4-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 21618,
+      "sha256": "412fbceab9f21e8c516a1418fcb37981c1f94b496ea1d88e420c8c4e144c6e45"
+    },
+    {
+      "file": "public/art/extras-5-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 30054,
+      "sha256": "e1002571db6a667c2bb953d7f7896782b7601c83f409bc70766237cb0772aa23"
+    },
+    {
+      "file": "public/art/extras-6-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 30940,
+      "sha256": "eaea45387ecc1006674e7a74b573c7087c9df954f4f7f43708f38790ffc1d12c"
+    },
+    {
+      "file": "public/art/extras-7-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 32612,
+      "sha256": "529e0d72bd73c6353e40b638df2b72b66d3094caf5bddbf5089f8886f27453ed"
+    },
+    {
+      "file": "public/art/extras-8-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 27692,
+      "sha256": "95a3d78ce35b3baf56a6f9a7d394173723f40ece4d7feafa23d2d384d56decab"
+    },
+    {
+      "file": "public/art/extras-9-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        236
+      ],
+      "bytes": 26252,
+      "sha256": "ae35ca11f2d2ba0a344585ccf9d36c54618451a55473cc2a0d4ec41edb89e184"
+    },
+    {
+      "file": "public/art/extras-10-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        236
+      ],
+      "bytes": 26096,
+      "sha256": "809e098e28090d2695b733731c44bf613704507791c893015d5e46a895b21c43"
+    },
+    {
+      "file": "public/art/extras-11-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        236
+      ],
+      "bytes": 38694,
+      "sha256": "dd05d1fc040e7d48c00c634eaa90a8f32512af1549261a25722939f02229b9fe"
+    },
+    {
+      "file": "public/art/extras-12-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        236
+      ],
+      "bytes": 33426,
+      "sha256": "ee6bf49338e5aa6807114521cacacff5c3bd93a00b6dee3bdb96338d225add10"
+    },
+    {
+      "file": "public/art/extras-13-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 26524,
+      "sha256": "b1e76972d2a00f31c296cac5fd78836f247f96f28ccc5374c28b684da0c61616"
+    },
+    {
+      "file": "public/art/extras-14-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 23548,
+      "sha256": "9fa533787afdb318753fe86b6b6ee10d51d8c971b1951dbe2601ad429a7ce6e1"
+    },
+    {
+      "file": "public/art/extras-15-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 30272,
+      "sha256": "b233a2e160720a7376a1774bd0246bc50e34c279c95590a9022968faefe6448b"
+    },
+    {
+      "file": "public/art/extras-16-480.webp",
+      "source": "extras",
+      "size": [
+        418,
+        235
+      ],
+      "bytes": 13370,
+      "sha256": "2df96ef51f7beb1b7ea4a9e050c189cb5126640ee3ae25226c68224add9fcd88"
+    }
+  ]
+}

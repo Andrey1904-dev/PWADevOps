@@ -67,6 +67,43 @@ try {
         .getByRole("heading", { name: "Каждый шаг — ближе к цели." })
         .waitFor();
       report.real_password_login = true;
+      for (const [screen, button] of [
+        ["home", null],
+        ["world", "План обучения"],
+        ["profile", "Статистика"],
+        ["calendar", "Календарь"],
+      ]) {
+        if (button)
+          await page.getByRole("button", { name: button, exact: true }).click();
+        await page.locator("main").waitFor();
+        await page.evaluate(async () => {
+          await Promise.all(
+            [...document.images]
+              .filter(
+                (i) =>
+                  i.loading !== "lazy" ||
+                  i.getBoundingClientRect().top < innerHeight,
+              )
+              .map((i) => i.decode().catch(() => {})),
+          );
+        });
+        if (
+          !(await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ))
+        )
+          throw Error("Private layout overflow: " + screen);
+        await page.screenshot({
+          path: `artifacts/production-004-${screen}-${name}.png`,
+          animations: "disabled",
+        });
+      }
+      await page.getByRole("button", { name: "Главная", exact: true }).click();
+      report.cinematic_art_loaded = await page
+        .locator(".hero img")
+        .evaluate((i) => i.complete && i.naturalWidth > 0);
+      if (!report.cinematic_art_loaded) throw Error("Hero artwork failed");
+
       const wanted =
         (await page.getByRole("combobox").inputValue()) === "in_progress"
           ? "solved"
@@ -154,7 +191,7 @@ const result = {
   reports,
 };
 writeFileSync(
-  "artifacts/production-browser-003.json",
+  "artifacts/production-browser-004.json",
   JSON.stringify(result, null, 2),
 );
 console.log(JSON.stringify(result));

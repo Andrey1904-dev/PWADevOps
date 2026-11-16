@@ -52,7 +52,17 @@ export default defineConfig({
         importScripts: ["auth-security-update.js"],
         globPatterns: ["**/*.{js,css,html,png,svg}"],
         navigateFallback: "index.html",
-        runtimeCaching: [],
+        runtimeCaching: [
+          {
+            urlPattern: /\/art\/.*\.webp$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "quest-art-v4",
+              expiration: { maxEntries: 60, maxAgeSeconds: 30 * 86400 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
     }),
   ],
